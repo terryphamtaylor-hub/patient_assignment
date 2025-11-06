@@ -1,0 +1,1840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Assignment App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .btn-primary { background-color: #2563eb; color: white; font-weight: 600; padding: 0.5rem 1rem; border-radius: 0.5rem; box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px 0 rgba(0,0,0,0.06); transition: background-color 0.15s ease-in-out; }
+        .btn-primary:hover { background-color: #1d4ed8; }
+        .btn-primary:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        .btn-secondary { background-color: #dc2626; color: white; font-weight: 600; padding: 0.5rem 1rem; border-radius: 0.5rem; box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px 0 rgba(0,0,0,0.06); transition: background-color 0.15s ease-in-out; }
+        .btn-secondary:hover { background-color: #b91c1c; }
+        .btn-neutral { background-color: #6b7280; color: white; font-weight: 600; padding: 0.5rem 1rem; border-radius: 0.5rem; box-shadow: 0 1px 3px 0 rgba(0,0,0,0.1), 0 1px 2px 0 rgba(0,0,0,0.06); transition: background-color 0.15s ease-in-out; }
+        .btn-neutral:hover { background-color: #4b5563; }
+        .btn-neutral:disabled { background-color: #9ca3af; cursor: not-allowed; }
+        .btn-small-action { padding: 0.25rem 0.5rem; font-size: 0.875rem; }
+        .input-field { width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; box-shadow: inset 0 1px 2px 0 rgba(0,0,0,0.05); }
+        .compact-input { width: 4rem; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; box-shadow: inset 0 1px 2px 0 rgba(0,0,0,0.05); }
+        .label-text { display: block; margin-bottom: 0.25rem; font-size: 0.875rem; font-weight: 500; color: #374151; }
+        .checkbox-label { display: flex; align-items: center; font-size: 0.875rem; color: #374151; }
+        .checkbox-label input { margin-right: 0.5rem; height: 1rem; width: 1rem; }
+        .modal-backdrop { position: fixed; inset: 0; background-color: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 1rem; visibility: hidden; opacity: 0; transition: opacity 0.2s ease-in-out, visibility 0.2s ease-in-out; }
+        .modal-backdrop.visible { visibility: visible; opacity: 1; }
+        .modal-content { background-color: white; padding: 2rem; border-radius: 0.75rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05); width: 100%; max-width: 32rem; text-align: center; max-height: 90vh; overflow-y: auto; }
+        .modal-content-large { max-width: 48rem; }
+        .textarea-large { width: 100%; min-height: 200px; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 0.375rem; font-family: monospace; font-size: 0.875rem; }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-100 p-4 font-sans text-gray-800">
+    <h1 class="text-4xl font-bold text-center text-blue-700 mb-6">Medical Team Patient Assignment</h1>
+    <p id="userIdDisplay" class="text-center text-sm text-gray-600 mb-1 hidden">User ID: <span class="font-mono bg-gray-200 px-2 py-1 rounded"></span></p>
+    <p class="text-center text-xs text-gray-500 mb-6">Tip: Patient lists on teams are reset with each new assignment run (undo available for last run). Reset Teams clears current assignments without undo history.</p>
+    
+    <!-- Main App Structure -->
+    <div id="app-container">
+        <!-- Teams Section -->
+        <div class="bg-white p-6 rounded-xl shadow-md mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-semibold text-blue-600">Current Teams (<span id="teams-count">0</span>)</h2>
+                <div class="space-x-2">
+                    <button id="fast-data-entry-btn" class="btn-neutral">Fast Data Entry</button>
+                    <button id="reset-teams-btn" class="btn-secondary">Reset Teams</button>
+                    <button id="edit-add-teams-btn" class="btn-primary">Edit/Add Teams</button>
+                </div>
+            </div>
+            <div id="teams-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <p id="teams-placeholder" class="text-gray-500">Loading teams...</p>
+            </div>
+        </div>
+
+        <!-- Add Patient Section -->
+        <div class="bg-white p-6 rounded-xl shadow-md mb-8">
+            <h2 class="text-2xl font-semibold text-blue-600 mb-4">Add New Unassigned Patient</h2>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                <div class="md:col-span-2"> <label for="patientName" class="label-text">Patient Name:</label> <input type="text" id="patientName" class="input-field" placeholder="Patient initials e.g., AA" /> </div>
+                <div> <label for="patientLocation" class="label-text">Current Location:</label> <input type="text" id="patientLocation" class="input-field" placeholder="e.g., G21" /> </div>
+                <div> 
+                    <label for="patientType" class="label-text">Patient Type:</label> 
+                    <select id="patientType" class="input-field">
+                        <option value="None">None</option>
+                        <option value="Gyn">Gyn</option>
+                        <option value="Sarcoma">Sarcoma</option>
+                    </select>
+                </div>
+                <div class="flex items-center md:pt-6"> <input type="checkbox" id="needsHAndP" class="h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mr-2"/> <label for="needsHAndP" class="label-text mb-0">Needs H&P</label> </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mt-4">
+                <div class="md:col-span-2"> <label for="admittingTeam" class="label-text">Admitting Team:</label> <input type="text" id="admittingTeam" class="input-field" placeholder="e.g., M, D, Nocturnal, Backup" /> </div>
+                <div class="md:col-span-3 flex items-end"> <button id="add-patient-btn" class="w-full btn-primary">Add Patient to Unassigned List</button> </div>
+            </div>
+        </div>
+
+        <!-- Unassigned Patients & Actions -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <div class="bg-white p-6 rounded-xl shadow-md">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-semibold text-blue-600">Unassigned Patients (<span id="unassigned-patients-count">0</span>)</h2>
+                    <button id="delete-all-unassigned-btn" class="btn-secondary btn-small-action">Del All</button>
+                </div>
+                <ul id="unassigned-patients-list" class="space-y-3 max-h-96 overflow-y-auto">
+                    <p class="text-gray-500">No unassigned patients.</p>
+                </ul>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-md text-center flex flex-col justify-center space-y-4">
+                <button id="assign-patients-btn" class="w-full btn-primary text-xl py-3">Assign Unassigned Patients</button>
+                <button id="undo-assignment-btn" class="w-full btn-neutral text-lg py-2">Undo Most Recent Assignment</button>
+                <div id="loading-spinner" class="mt-2 text-blue-600 items-center justify-center hidden">
+                    <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg> Processing...
+                </div>
+            </div>
+        </div>
+
+        <!-- Reports -->
+        <div id="assignment-report-container" class="bg-green-50 p-6 rounded-xl shadow-md border border-green-200 mb-8 hidden"></div>
+        <div id="team-summary-container" class="bg-indigo-50 p-6 rounded-xl shadow-md border border-indigo-200 mb-8 hidden"></div>
+    </div>
+
+    <!-- Modals -->
+    <div id="general-modal" class="modal-backdrop">
+        <div class="modal-content">
+            <p id="general-modal-message" class="text-lg font-medium mb-4 whitespace-pre-wrap"></p>
+            <div id="general-modal-content" class="mb-6 text-left"></div>
+            <div id="general-modal-actions" class="flex justify-center space-x-4"></div>
+        </div>
+    </div>
+
+    <div id="fast-data-entry-modal" class="modal-backdrop">
+        <div class="modal-content modal-content-large">
+            <h2 class="text-2xl font-semibold mb-4">Fast Data Entry</h2>
+            <div class="space-y-4 text-left">
+                <div>
+                    <label class="label-text">Team Data</label>
+                    <p class="text-xs text-gray-500 mb-1">Format: (TeamName; StartCount; OtherLoc1,OtherLoc2)</p>
+                    <textarea id="fast-entry-team-data" class="textarea-large" placeholder="(A;7;P4,P7,G21,ED)(B;12;G22,G21,G20)(C;14;G22,P7)"></textarea>
+                </div>
+                <div>
+                    <label class="label-text">Unassigned Patient Data</label>
+                    <p class="text-xs text-gray-500 mb-1">Format: (AdmitTeam; PtName; Location; Gyn Y/N; Sarcoma Y/N; H&P Y/N) or (PtName; Location...)</p>
+                    <textarea id="fast-entry-patient-data" class="textarea-large" placeholder="(M;G22A;G22;N;N;Y)(G22B;G22;N;N;N)(D;G7A;G7;N;Y;N)"></textarea>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end space-x-4">
+                <button id="fast-entry-cancel" class="btn-neutral">Cancel</button>
+                <button id="fast-entry-submit" class="btn-primary">Submit Data</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="edit-teams-modal" class="modal-backdrop">
+        <div class="modal-content modal-content-large">
+            <h2 id="edit-teams-modal-title" class="text-xl font-semibold mb-4">Edit/Add Teams</h2>
+            <div class="space-y-3 text-left border p-4 rounded-md mb-4 bg-gray-50">
+                <div> <label class="label-text">Team Name:</label> <input type="text" id="team-form-name" class="input-field" /> </div>
+                <div> <label class="label-text">Starting Patient Count:</label> <input type="number" id="team-form-start-count" class="input-field" min="0" /> </div>
+                <div> <label class="label-text">Preferred Locations (e.g., LocA (1), LocB (2)):</label> <input type="text" id="team-form-pref-loc" class="input-field" placeholder="Floor1 (1), ICU (2)"/> </div>
+                <div> <label class="label-text">Other Locations (comma-separated):</label> <input type="text" id="team-form-other-loc" class="input-field" placeholder="e.g., G21, P7, ED" /> </div>
+                <div> <label class="label-text">Avoid Locations (comma-separated):</label> <input type="text" id="team-form-avoid-loc" class="input-field" placeholder="FloorX, WardY" /> </div>
+                <div class="flex items-center space-x-6">
+                    <div class="flex items-center"> <input type="checkbox" id="team-form-gyn" class="h-4 w-4 mr-2"/> <label for="team-form-gyn" class="label-text mb-0">Prefers Gyn Patients</label> </div>
+                    <div class="flex items-center"> <input type="checkbox" id="team-form-sarcoma" class="h-4 w-4 mr-2"/> <label for="team-form-sarcoma" class="label-text mb-0">Prefers Sarcoma Patients</label> </div>
+                </div>
+                <div class="flex items-center"> <input type="checkbox" id="team-form-low-cap" class="h-4 w-4 mr-2"/> <label for="team-form-low-cap" class="label-text mb-0">Low Cap (Max 10 Patients)</label> </div>
+                <div> <label class="label-text">Other Preferences/Notes:</label> <textarea id="team-form-other-pref" class="input-field" rows="2"></textarea> </div>
+                <div class="flex space-x-2 mt-3">
+                    <button id="team-form-save" class="btn-primary">Save Team</button>
+                    <button id="team-form-delete" class="btn-secondary hidden">Delete This Team</button>
+                    <button id="team-form-clear" class="btn-neutral">Clear Form / Add New</button>
+                </div>
+            </div>
+            <hr class="my-4"/>
+            <h3 class="text-lg font-semibold mb-2">Manage Existing Teams List</h3>
+            <ul id="edit-teams-list" class="max-h-60 overflow-y-auto text-left space-y-1"></ul>
+            <div class="mt-6 flex flex-col sm:flex-row justify-between items-center space-y-2 sm:space-y-0">
+                <div class="flex space-x-2">
+                    <button id="load-defaults-btn" class="btn-neutral" title="Deletes all current teams and loads a predefined set.">Load Default Team Set</button>
+                    <button id="edit-defaults-btn" class="btn-neutral">Edit Session Default Team Set</button>
+                </div>
+                <button id="edit-teams-exit-btn" class="btn-primary">Exit Manager</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="edit-default-teams-modal" class="modal-backdrop">
+        <div class="modal-content modal-content-large">
+             <h2 class="text-2xl font-semibold mb-6">Edit Session Default Team Set</h2>
+             <p class="text-sm text-gray-600 mb-4">Changes made here apply to the "Load Default Team Set" button for this session only. They are not saved permanently.</p>
+             <div id="edit-default-form-container" class="hidden"></div>
+             <div id="edit-default-list-container" class="max-h-96 overflow-y-auto space-y-2 mb-4"></div>
+             <button id="edit-defaults-exit-btn" class="btn-primary">Done Editing Defaults</button>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+    // --- STATE MANAGEMENT ---
+    let teams = [];
+    let unassignedPatients = [];
+    let assignmentReportData = [];
+    let teamAssignmentSummaryData = [];
+    let loading = false;
+    
+    let previousTeamsState = null;
+    let previousUnassignedPatientsState = null;
+    let assignmentPerformedInSession = false;
+
+    let editingTeam = null; // Holds the team object being edited in the main modal
+
+    const initialTeamFormState = {
+        id: null, teamName: '', startingPatientCount: 0, preferredLocations: [],
+        otherLocations: [], avoidLocations: [], prefersGynPatients: false,
+        prefersSarcomaPatients: false, otherPreferences: '', lowCap: false, currentPatients: []
+    };
+
+    const defaultTeamDataArray = [
+        { id: 'default-A', teamName: 'A', preferredLocations: [{ location: 'P4', priority: 1 }], otherPreferences: '', startingPatientCount: 0, otherLocations: [], avoidLocations: [], prefersGynPatients: false, prefersSarcomaPatients: false, currentPatients: [], lowCap: false },
+        { id: 'default-B', teamName: 'B', preferredLocations: [{ location: 'G21', priority: 1 }], otherPreferences: '', startingPatientCount: 0, otherLocations: [], avoidLocations: [], prefersGynPatients: false, prefersSarcomaPatients: false, currentPatients: [], lowCap: false },
+        { id: 'default-C', teamName: 'C', preferredLocations: [{ location: 'G22', priority: 1 }], otherPreferences: '', startingPatientCount: 0, otherLocations: [], avoidLocations: [], prefersGynPatients: false, prefersSarcomaPatients: false, currentPatients: [], lowCap: false },
+        { id: 'default-E', teamName: 'E', avoidLocations: ['G22', 'G21', 'G11', 'P4'], otherPreferences: 'Tries to avoid G22, G21, G11, P4.', startingPatientCount: 0, preferredLocations: [], otherLocations: [], prefersGynPatients: false, prefersSarcomaPatients: false, currentPatients: [], lowCap: false }, 
+        { id: 'default-F', teamName: 'F', preferredLocations: [{ location: 'G22', priority: 2 }], otherPreferences: '', startingPatientCount: 0, otherLocations: [], avoidLocations: [], prefersGynPatients: false, prefersSarcomaPatients: false, currentPatients: [], lowCap: false },
+        { id: 'default-G', teamName: 'G', preferredLocations: [{ location: 'G21', priority: 2 }], otherPreferences: '', startingPatientCount: 0, otherLocations: [], avoidLocations: [], prefersGynPatients: false, prefersSarcomaPatients: false, currentPatients: [], lowCap: false },
+        { id: 'default-H', teamName: 'H', preferredLocations: [], avoidLocations: ['G22', 'G21', 'G11', 'G7'], otherPreferences: '', startingPatientCount: 0, otherLocations: [], prefersGynPatients: false, prefersSarcomaPatients: false, currentPatients: [], lowCap: false }, 
+        { id: 'default-I', teamName: 'I', preferredLocations: [{ location: 'G7', priority: 1 }], otherPreferences: '', startingPatientCount: 0, otherLocations: [], avoidLocations: [], prefersGynPatients: false, prefersSarcomaPatients: false, currentPatients: [], lowCap: false },
+        { id: 'default-J', teamName: 'J', preferredLocations: [{ location: 'G11', priority: 1 }], otherPreferences: '', startingPatientCount: 0, otherLocations: [], avoidLocations: [], prefersGynPatients: false, prefersSarcomaPatients: false, currentPatients: [], lowCap: false },
+        { id: 'default-K', teamName: 'K', preferredLocations: [], avoidLocations: ['G22', 'G21', 'G11', 'G7'], otherPreferences: '', startingPatientCount: 0, otherLocations: [], prefersGynPatients: false, prefersSarcomaPatients: false, currentPatients: [], lowCap: false },
+        { id: 'default-L', teamName: 'L', preferredLocations: [{ location: 'G11', priority: 2 }], otherPreferences: '', startingPatientCount: 0, otherLocations: [], avoidLocations: [], prefersGynPatients: false, prefersSarcomaPatients: false, currentPatients: [], lowCap: false },
+        { id: 'default-N', teamName: 'N', prefersGynPatients: true, otherPreferences: 'Preferred team for Gyn patients.', startingPatientCount: 0, preferredLocations: [], otherLocations: [], avoidLocations: [], prefersSarcomaPatients: false, currentPatients: [], lowCap: false },
+        { id: 'default-O', teamName: 'O', preferredLocations: [{ location: 'G21', priority: 3 }], otherPreferences: '', startingPatientCount: 0, otherLocations: [], avoidLocations: [], prefersGynPatients: false, prefersSarcomaPatients: true, currentPatients: [], lowCap: false },
+        { id: 'default-P', teamName: 'P', preferredLocations: [{ location: 'G22', priority: 3 }], otherPreferences: '', startingPatientCount: 0, otherLocations: [], avoidLocations: [], prefersGynPatients: false, prefersSarcomaPatients: false, currentPatients: [], lowCap: false },
+    ];
+    
+    let sessionDefaultTeams = JSON.parse(JSON.stringify(defaultTeamDataArray));
+    let editingSingleDefaultTeam = null;
+
+    // --- DOM ELEMENT REFERENCES ---
+    const teamsContainer = document.getElementById('teams-container');
+    const teamsCountSpan = document.getElementById('teams-count');
+    const teamsPlaceholder = document.getElementById('teams-placeholder');
+    const unassignedPatientsList = document.getElementById('unassigned-patients-list');
+    const unassignedPatientsCountSpan = document.getElementById('unassigned-patients-count');
+    const patientNameInput = document.getElementById('patientName');
+    const patientLocationInput = document.getElementById('patientLocation');
+    const admittingTeamInput = document.getElementById('admittingTeam');
+    const patientTypeSelect = document.getElementById('patientType');
+    const needsHAndPCheckbox = document.getElementById('needsHAndP');
+    const addPatientBtn = document.getElementById('add-patient-btn');
+    const assignPatientsBtn = document.getElementById('assign-patients-btn');
+    const undoAssignmentBtn = document.getElementById('undo-assignment-btn');
+    const resetTeamsBtn = document.getElementById('reset-teams-btn');
+    const deleteAllUnassignedBtn = document.getElementById('delete-all-unassigned-btn');
+    const loadingSpinner = document.getElementById('loading-spinner');
+    const assignmentReportContainer = document.getElementById('assignment-report-container');
+    const teamSummaryContainer = document.getElementById('team-summary-container');
+    
+    // Modals
+    const generalModal = document.getElementById('general-modal');
+    const generalModalMessage = document.getElementById('general-modal-message');
+    const generalModalContent = document.getElementById('general-modal-content');
+    const generalModalActions = document.getElementById('general-modal-actions');
+    const fastDataEntryModal = document.getElementById('fast-data-entry-modal');
+    const editTeamsModal = document.getElementById('edit-teams-modal');
+    const editDefaultTeamsModal = document.getElementById('edit-default-teams-modal');
+    
+    // --- HELPER FUNCTIONS ---
+    const parseLocationsWithPriority = (text) => {
+        if (!text || text.trim() === '') return [];
+        return text.split(',').map(part => {
+            part = part.trim();
+            const match = part.match(/(.+)\s\((\d+)\)$/);
+            return match ? { location: match[1].trim(), priority: parseInt(match[2], 10) } : { location: part, priority: 1 };
+        }).filter(loc => loc.location !== '');
+    };
+
+    const formatLocationsWithPriority = (locationsArray) => {
+        return (locationsArray || []).map(loc => loc.priority === 1 ? loc.location : `${loc.location} (${loc.priority})`).join(', ');
+    };
+    
+    const setLoadingState = (isLoading) => {
+        loading = isLoading;
+        loadingSpinner.style.display = isLoading ? 'flex' : 'hidden';
+        assignPatientsBtn.disabled = isLoading || teams.length === 0 || unassignedPatients.length === 0;
+        undoAssignmentBtn.disabled = isLoading || !assignmentPerformedInSession;
+        resetTeamsBtn.disabled = isLoading || teams.length === 0;
+        deleteAllUnassignedBtn.disabled = isLoading || unassignedPatients.length === 0;
+        document.getElementById('fast-entry-submit').disabled = isLoading;
+    }
+    
+    // --- RENDER FUNCTIONS ---
+    const renderTeams = () => {
+        teamsContainer.innerHTML = '';
+        teams.sort((a, b) => a.teamName.localeCompare(b.teamName));
+        teamsCountSpan.textContent = teams.length;
+        
+        if (teams.length === 0) {
+            teamsPlaceholder.style.display = 'block';
+            teamsPlaceholder.textContent = "No teams loaded. Add teams or load defaults via 'Edit/Add Teams'.";
+            teamsContainer.appendChild(teamsPlaceholder);
+        } else {
+            teams.forEach(team => {
+                const teamCard = document.createElement('div');
+                teamCard.className = "border border-gray-200 rounded-md p-3 bg-blue-50";
+                
+                const patientsToDisplay = team.currentPatients || [];
+                const needsHAndPCount = patientsToDisplay.filter(p => p.needsHAndP).length;
+                const followUpCount = patientsToDisplay.length - needsHAndPCount;
+                const pointsAdded = patientsToDisplay.reduce((sum, p) => sum + (p.needsHAndP ? 2 : 1), 0);
+                let summary = `${patientsToDisplay.length} total (${pointsAdded} pts): `;
+                if (followUpCount > 0) summary += `${followUpCount} follow-up(s)`;
+                if (needsHAndPCount > 0) {
+                    if (followUpCount > 0) summary += ", ";
+                    summary += `${needsHAndPCount} H&P(s)`;
+                }
+                const assignedSummary = patientsToDisplay.length > 0 ? summary : "None";
+
+                teamCard.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <h3 class="text-lg font-bold text-blue-800">${team.teamName}</h3>
+                        <label class="checkbox-label bg-yellow-100 px-2 py-1 rounded ml-2">
+                            <input type="checkbox" data-team-id="${team.id}" class="low-cap-checkbox" ${team.lowCap ? 'checked' : ''} /> Low Cap (10)
+                        </label>
+                    </div>
+                    <div class="text-sm text-gray-700 my-1 flex items-center">
+                        <label class="font-semibold mr-2">Starting Patients:</label>
+                        <input type="number" data-team-id="${team.id}" class="starting-count-input compact-input" value="${team.startingPatientCount}" min="0"/>
+                    </div>
+                    <p class="text-xs text-gray-600"><span class="font-semibold">Pref. Locations:</span> ${formatLocationsWithPriority(team.preferredLocations) || 'None'}</p>
+                    <div class="text-xs text-gray-600 flex items-center">
+                        <span class="font-semibold mr-1">Other Locations:</span>
+                        <input type="text" data-team-id="${team.id}" class="other-locations-input ml-1 p-0.5 border border-gray-300 rounded text-xs flex-grow min-w-0" value="${(team.otherLocations || []).join(', ')}" placeholder="e.g., G21, P7, ED"/>
+                    </div>
+                    <p class="text-xs text-gray-600"><span class="font-semibold">Avoid Locations:</span> ${(team.avoidLocations || []).join(', ') || 'None'}</p>
+                    <p class="text-xs text-gray-600"><span class="font-semibold">Gyn Preference:</span> ${team.prefersGynPatients ? 'Yes' : 'No'}</p>
+                    <p class="text-xs text-gray-600"><span class="font-semibold">Sarcoma Preference:</span> ${team.prefersSarcomaPatients ? 'Yes' : 'No'}</p>
+                    ${team.otherPreferences ? `<p class="text-xs text-gray-600 mt-1 pt-1 border-t border-gray-300"><span class="font-semibold">Other Notes:</span> ${team.otherPreferences}</p>` : ''}
+                    <p class="text-sm text-gray-700 mt-2 pt-1 border-t border-gray-300 font-semibold">Assigned (this session):</p>
+                    <p class="text-sm text-gray-600">${assignedSummary}</p>
+                `;
+                teamsContainer.appendChild(teamCard);
+            });
+        }
+        updateButtonStates();
+    };
+
+    const renderUnassignedPatients = () => {
+        unassignedPatientsList.innerHTML = '';
+        unassignedPatientsCountSpan.textContent = unassignedPatients.length;
+
+        if (unassignedPatients.length === 0) {
+            unassignedPatientsList.innerHTML = '<p class="text-gray-500">No unassigned patients.</p>';
+        } else {
+            unassignedPatients.forEach(p => {
+                const li = document.createElement('li');
+                li.className = "flex justify-between items-center border-b border-gray-200 pb-2 last:border-b-0";
+                li.innerHTML = `
+                    <div>
+                        <p class="font-medium text-gray-800">${p.patientName}</p>
+                        <p class="text-sm text-gray-600">
+                            Loc: ${p.currentLocation}
+                            ${p.patientType ? `(Type: ${p.patientType})` : ''}
+                            ${p.needsHAndP ? '<span class="font-semibold text-red-600">(Needs H&P)</span>' : ''}
+                        </p>
+                        ${p.admittingTeam ? `<p class="text-xs text-gray-500">Admitting: ${p.admittingTeam}</p>` : ''}
+                    </div>
+                    <button data-patient-id="${p.id}" data-patient-name="${p.patientName}" class="btn-secondary btn-small-action delete-patient-btn">Del</button>
+                `;
+                unassignedPatientsList.appendChild(li);
+            });
+        }
+        updateButtonStates();
+    };
+
+    const renderReports = () => {
+        // Assignment Report
+        if (assignmentReportData.length > 0) {
+            let reportHtml = `<h2 class="text-2xl font-semibold text-green-700 mb-4">Assignment Report by Admitting Team</h2><div class="max-h-96 overflow-y-auto text-sm">`;
+            let lastAdmittingTeam = null;
+            assignmentReportData.forEach(entry => {
+                if (lastAdmittingTeam !== entry.admittingTeam) {
+                    reportHtml += `<h3 class="text-lg font-semibold text-green-600 mt-3 mb-1 pt-2 border-t border-green-200 first:mt-0 first:border-t-0">Admitting Team: ${entry.admittingTeam}</h3>`;
+                    lastAdmittingTeam = entry.admittingTeam;
+                }
+                reportHtml += `<p class="ml-4 text-gray-700"><span class="font-medium">${entry.patientName}</span> assigned to <span class="font-medium">${entry.assignedTeamName}</span> <span class="text-xs text-gray-500">(${entry.phase})</span></p>`;
+            });
+            reportHtml += `</div>`;
+            assignmentReportContainer.innerHTML = reportHtml;
+            assignmentReportContainer.classList.remove('hidden');
+        } else {
+            assignmentReportContainer.classList.add('hidden');
+        }
+
+        // Team Summary Report
+        if (teamAssignmentSummaryData.length > 0) {
+            let summaryHtml = `<h2 class="text-2xl font-semibold text-indigo-700 mb-4">Team Assignment Summary</h2><div class="max-h-96 overflow-y-auto text-sm">`;
+            teamAssignmentSummaryData.forEach(summary => {
+                summaryHtml += `<p class="text-gray-700 mb-1"><span class="font-bold text-indigo-800">${summary.teamName}:</span> ${summary.startingAmount} + ${summary.newlyAssignedCount} = ${summary.totalPatients}${summary.detailString}</p>`;
+            });
+            summaryHtml += `</div>`;
+            teamSummaryContainer.innerHTML = summaryHtml;
+            teamSummaryContainer.classList.remove('hidden');
+        } else {
+            teamSummaryContainer.classList.add('hidden');
+        }
+    };
+    
+    const updateButtonStates = () => {
+        assignPatientsBtn.disabled = loading || teams.length === 0 || unassignedPatients.length === 0;
+        undoAssignmentBtn.disabled = loading || !assignmentPerformedInSession;
+        resetTeamsBtn.disabled = loading || teams.length === 0;
+        deleteAllUnassignedBtn.disabled = loading || unassignedPatients.length === 0;
+    }
+
+    // --- MODAL LOGIC ---
+    const displayGeneralModal = (message, confirmCallback = null, contentEl = null) => {
+        generalModalMessage.textContent = message;
+        generalModalContent.innerHTML = '';
+        if (contentEl) {
+            if (typeof contentEl === 'string') {
+                generalModalContent.innerHTML = contentEl;
+            } else {
+                generalModalContent.appendChild(contentEl);
+            }
+        }
+        
+        generalModalActions.innerHTML = '';
+        if (confirmCallback) {
+            const confirmBtn = document.createElement('button');
+            confirmBtn.className = 'btn-primary';
+            confirmBtn.textContent = 'Confirm';
+            confirmBtn.onclick = () => { confirmCallback(); hideGeneralModal(); };
+            
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'btn-neutral';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.onclick = hideGeneralModal;
+            
+            generalModalActions.append(confirmBtn, cancelBtn);
+        } else {
+            const okBtn = document.createElement('button');
+            okBtn.className = 'btn-primary';
+            okBtn.textContent = 'OK';
+            okBtn.onclick = hideGeneralModal;
+            generalModalActions.appendChild(okBtn);
+        }
+        generalModal.classList.add('visible');
+    };
+    
+    const hideGeneralModal = () => generalModal.classList.remove('visible');
+
+    // --- APPLICATION LOGIC (Adapted from React) ---
+    // Note: All functions that were async due to Firebase are now synchronous.
+
+    const _loadDefaultTeamsData = () => {
+        teams = JSON.parse(JSON.stringify(sessionDefaultTeams));
+        assignmentPerformedInSession = false;
+        assignmentReportData = [];
+        teamAssignmentSummaryData = [];
+        renderAll();
+        return true;
+    };
+    
+    const addPatient = () => {
+        const patientName = patientNameInput.value.trim();
+        const currentLocation = patientLocationInput.value.trim();
+        const admittingTeam = admittingTeamInput.value.trim();
+        if (!patientName) return displayGeneralModal("Patient name cannot be empty.");
+        if (!currentLocation) return displayGeneralModal("Patient location cannot be empty.");
+
+        unassignedPatients.push({
+            id: `patient_${Date.now()}_${Math.random()}`,
+            patientName,
+            currentLocation,
+            admittingTeam: admittingTeam || 'N/A',
+            patientType: patientTypeSelect.value === 'None' ? '' : patientTypeSelect.value,
+            needsHAndP: needsHAndPCheckbox.checked,
+        });
+
+        displayGeneralModal(`Patient "${patientName}" added to unassigned list.`);
+        patientNameInput.value = '';
+        patientLocationInput.value = '';
+        admittingTeamInput.value = '';
+        patientTypeSelect.value = 'None';
+        needsHAndPCheckbox.checked = false;
+        
+        renderUnassignedPatients();
+    };
+
+    const deleteUnassignedPatient = (patientId, patientName) => {
+        unassignedPatients = unassignedPatients.filter(p => p.id !== patientId);
+        displayGeneralModal(`Unassigned patient "${patientName}" deleted.`);
+        renderUnassignedPatients();
+    };
+    
+    const deleteAllUnassignedPatients = () => {
+        if (unassignedPatients.length === 0) return displayGeneralModal("No unassigned patients to delete.");
+        
+        displayGeneralModal("Are you sure you want to delete ALL unassigned patients?", () => {
+            unassignedPatients = [];
+            displayGeneralModal("All unassigned patients deleted.");
+            renderUnassignedPatients();
+        });
+    };
+    
+    const handleResetTeams = () => {
+        displayGeneralModal("Are you sure you want to reset all teams? This will remove all currently assigned patients from teams for this session.", () => {
+            teams.forEach(team => team.currentPatients = []);
+            assignmentPerformedInSession = false;
+            previousTeamsState = null;
+            previousUnassignedPatientsState = null;
+            assignmentReportData = [];
+            teamAssignmentSummaryData = [];
+            renderAll();
+            displayGeneralModal("All teams have been reset.");
+        });
+    };
+    
+    const handleUndoAssignment = () => {
+        if (!previousTeamsState || !previousUnassignedPatientsState) {
+            return displayGeneralModal("No assignment to undo.");
+        }
+        teams = JSON.parse(JSON.stringify(previousTeamsState));
+        unassignedPatients = JSON.parse(JSON.stringify(previousUnassignedPatientsState));
+        
+        assignmentPerformedInSession = false;
+        previousTeamsState = null;
+        previousUnassignedPatientsState = null;
+        assignmentReportData = [];
+        teamAssignmentSummaryData = [];
+        renderAll();
+        displayGeneralModal("Most recent assignment undone successfully.");
+    };
+
+    const handleFastDataSubmit = () => {
+        setLoadingState(true);
+        const teamDataText = document.getElementById('fast-entry-team-data').value;
+        const patientDataText = document.getElementById('fast-entry-patient-data').value;
+
+        try {
+            let updatesMade = false;
+            let newPatientsAdded = false;
+
+            // Process Team Data
+            if (teamDataText.trim()) {
+                const teamEntries = teamDataText.trim().match(/\((.*?)\)/g);
+                if (teamEntries) {
+                    teamEntries.forEach(entry => {
+                        const content = entry.slice(1, -1);
+                        const parts = content.split(';').map(p => p.trim());
+                        if (parts.length < 2) return;
+
+                        const teamName = parts[0];
+                        const startingPatientCount = parseInt(parts[1], 10);
+                        const otherLocations = (parts[2] || '').split(',').map(loc => loc.trim()).filter(Boolean);
+
+                        const teamToUpdate = teams.find(t => t.teamName.toLowerCase() === teamName.toLowerCase());
+                        if (teamToUpdate) {
+                            teamToUpdate.startingPatientCount = startingPatientCount;
+                            teamToUpdate.otherLocations = otherLocations;
+                            updatesMade = true;
+                        }
+                    });
+                }
+            }
+            
+            // Process Patient Data
+            if (patientDataText.trim()) {
+                const patientEntries = patientDataText.trim().match(/\((.*?)\)/g);
+                 if (patientEntries) {
+                    for (const entry of patientEntries) {
+                        const parts = entry.slice(1, -1).split(/[;:]/).map(p => p.trim());
+                        let admittingTeam, patientName, currentLocation, isGyn, isSarcoma, needsHAndP;
+
+                        if (parts.length === 6) {
+                            [admittingTeam, patientName, currentLocation, isGyn, isSarcoma, needsHAndP] = parts;
+                        } else if (parts.length === 5) {
+                            admittingTeam = 'N/A';
+                            [patientName, currentLocation, isGyn, isSarcoma, needsHAndP] = parts;
+                        } else {
+                            throw new Error(`Invalid patient format: ${entry}`);
+                        }
+    
+                        let patientType = '';
+                        if (isSarcoma.toUpperCase() === 'Y') patientType = 'Sarcoma';
+                        else if (isGyn.toUpperCase() === 'Y') patientType = 'Gyn';
+    
+                        unassignedPatients.push({
+                            id: `patient_${Date.now()}_${Math.random()}`,
+                            admittingTeam: admittingTeam || 'N/A', patientName, currentLocation, patientType,
+                            needsHAndP: needsHAndP.toUpperCase() === 'Y',
+                        });
+                        newPatientsAdded = true;
+                    }
+                }
+            }
+
+            if (updatesMade || newPatientsAdded) {
+                renderAll();
+                displayGeneralModal(`Fast data entry successful!`);
+                fastDataEntryModal.classList.remove('visible');
+                document.getElementById('fast-entry-team-data').value = '';
+                document.getElementById('fast-entry-patient-data').value = '';
+            } else {
+                displayGeneralModal("No valid data processed.");
+            }
+        } catch (e) {
+            displayGeneralModal(`Error processing data: ${e.message}`);
+        } finally {
+            setLoadingState(false);
+        }
+    };
+
+    // --- Core Assignment Logic (Copied and pasted, should work as is) ---
+    // All of the complex algorithm functions (findBestTeamForPatient, swapPhaseLogic, etc.)
+    // are included here but omitted from this comment block for brevity.
+    // They operate on the local state variables and don't need changes.
+    const findBestTeamForPatient = (patient, availableTeams, rules, allTeamsForLoadBalancing) => {
+        let bestTeam = null;
+        let highestScore = -Infinity;
+
+        for (const team of availableTeams) {
+            const currentPatientSlotsFilled = team.startingPatientCount + team.currentPatientsThisSession.length;
+            if (currentPatientSlotsFilled >= team.cap && !(team.cap === 16 && currentPatientSlotsFilled === 15 && patient.needsHAndP)) {
+                continue;
+            }
+
+            let score = 0;
+
+            if (rules.phase === 'sarcoma') {
+                if (patient.patientType?.toLowerCase() === 'sarcoma' && team.prefersSarcomaPatients) score += 1000;
+            }
+            if (rules.phase === 'gyn') {
+                if (patient.patientType?.toLowerCase() === 'gyn' && team.prefersGynPatients) score += 1000;
+            }
+            if (rules.phase === 'prefLoc') {
+                const preferredMatch = team.preferredLocations.find(pl => pl.location === patient.currentLocation);
+                if (preferredMatch) score += 500 + (5 - preferredMatch.priority);
+                else continue; 
+            }
+
+            if (team.avoidLocations.includes(patient.currentLocation)) score -= rules.relaxAvoid ? 50 : 1000;
+            
+            if (rules.phase !== 'sarcoma' && patient.patientType?.toLowerCase() === 'sarcoma' && team.prefersSarcomaPatients) score += 100;
+            if (rules.phase !== 'gyn' && patient.patientType?.toLowerCase() === 'gyn' && team.prefersGynPatients) score += 100;
+
+            if (rules.phase !== 'prefLoc') {
+                const preferredMatch = team.preferredLocations.find(pl => pl.location === patient.currentLocation);
+                if (preferredMatch) score += 50 + (5 - preferredMatch.priority);
+                else if (team.otherLocations.includes(patient.currentLocation)) score += 35; 
+            }
+            if (team.currentPatientsThisSession.some(p => p.location === patient.currentLocation)) score += 15; 
+
+            if (patient.needsHAndP) {
+                if (team.needsHAndPThisSessionCount > 0) { 
+                    score -= 200; 
+                    score -= team.newPatientsThisSessionCount * 10; 
+                }
+                if (team.cap - currentPatientSlotsFilled === 1) score += 150; 
+            }
+
+            let potentialNextTotalSlotsList = allTeamsForLoadBalancing.map(tCopy => {
+                return (tCopy.startingPatientCount || 0) + 
+                       tCopy.currentPatientsThisSession.length + 
+                       (tCopy.id === team.id ? 1 : 0);
+            });
+            const minPotentialTotalSlots = Math.min(...potentialNextTotalSlotsList);
+            const maxPotentialTotalSlots = Math.max(...potentialNextTotalSlotsList);
+            const diffInTotalSlots = maxPotentialTotalSlots - minPotentialTotalSlots;
+
+            if (diffInTotalSlots === 0) score += 400; 
+            else if (diffInTotalSlots === 1) score += 300; 
+            else if (diffInTotalSlots === 2) score += 150; 
+            else score -= diffInTotalSlots * 100;
+
+            const pointsFromThisPatient = patient.needsHAndP ? 2 : 1;
+            let potentialNextAddedPointsList = allTeamsForLoadBalancing.map(tCopy => {
+                return tCopy.currentLoad + (tCopy.id === team.id ? pointsFromThisPatient : 0);
+            });
+            const minPotentialAddedPoints = Math.min(...potentialNextAddedPointsList);
+            const maxPotentialAddedPoints = Math.max(...potentialNextAddedPointsList);
+            const diffInAddedPoints = maxPotentialAddedPoints - minPotentialAddedPoints;
+
+            if (diffInAddedPoints <= 1) score += 150; 
+            else if (diffInAddedPoints === 2) score += 75; 
+            else score -= diffInAddedPoints * 10; 
+            
+            score -= team.currentLoad * 0.25; 
+
+            if (score > highestScore) {
+                highestScore = score;
+                bestTeam = team;
+            } else if (score === highestScore) { 
+                if (!bestTeam) {
+                    bestTeam = team;
+                } else {
+                    if (team.startingPatientCount < bestTeam.startingPatientCount) {
+                        bestTeam = team;
+                    } else if (team.startingPatientCount === bestTeam.startingPatientCount) {
+                        if (team.currentLoad < bestTeam.currentLoad) {
+                            bestTeam = team;
+                        }
+                    }
+                }
+            }
+        }
+        return { bestTeam, highestScore };
+    };
+    const getSwapPatientScore = (patient, team) => {
+        let score = 0;
+        const isGyn = patient.type?.toLowerCase() === 'gyn';
+        const isSarcoma = patient.type?.toLowerCase() === 'sarcoma';
+    
+        if (isGyn) {
+            if (team.prefersGynPatients) score += 20000; 
+            else score -= 5000; 
+        } else { 
+            if (team.prefersGynPatients) score -= 500; 
+        }
+
+        if (isSarcoma) {
+            if (team.prefersSarcomaPatients) score += 20000;
+            else score -= 5000;
+        } else {
+            if (team.prefersSarcomaPatients) score -= 500;
+        }
+    
+        const p1Match = team.preferredLocations.find(pl => pl.location === patient.location && pl.priority === 1);
+        const p2Match = team.preferredLocations.find(pl => pl.location === patient.location && pl.priority === 2);
+        const p3Match = team.preferredLocations.find(pl => pl.location === patient.location && pl.priority === 3);
+    
+        if (p1Match) {
+            score += 10000;
+        } else if (p2Match) {
+            score += 4000;
+        } else if (p3Match) {
+            score += 2000;
+        } else if (team.otherLocations.includes(patient.location)) {
+            score += 1000;
+        }
+        return score;
+    };
+    const swapPhaseLogic = (teamsInput, maxSwapIterations = 3, minBenefitThreshold = 100) => {
+        let teams = JSON.parse(JSON.stringify(teamsInput));
+        let overallSwapMadeThisRun = false;
+        console.log("Starting Swap Phase...");
+
+        // --- H&P Upgrade Swap Sub-Phase ---
+        console.log("-> Running H&P Upgrade Swap Sub-Phase...");
+        for (let upgradeIter = 0; upgradeIter < 5; upgradeIter++) {
+            let upgradeSwapMade = false;
+            let bestUpgradeSwap = null;
+
+            const singleFollowUpTeams = teams.filter(t =>
+                t.currentPatientsThisSession.length === 1 && !t.currentPatientsThisSession[0].needsHAndP
+            );
+            const potentialHnpDonorTeams = teams.filter(t =>
+                t.currentPatientsThisSession.length > 1 && t.currentPatientsThisSession.some(p => p.needsHAndP)
+            );
+
+            if (singleFollowUpTeams.length === 0 || potentialHnpDonorTeams.length === 0) {
+                console.log("--> No eligible teams for H&P Upgrade swap.");
+                break;
+            }
+
+            for (const targetTeam of singleFollowUpTeams) {
+                const followUpPatient = targetTeam.currentPatientsThisSession[0];
+                for (const donorTeam of potentialHnpDonorTeams) {
+                    if (targetTeam.id === donorTeam.id) continue;
+                    for (let hnpIdx = 0; hnpIdx < donorTeam.currentPatientsThisSession.length; hnpIdx++) {
+                        const hnpPatient = donorTeam.currentPatientsThisSession[hnpIdx];
+                        if (!hnpPatient.needsHAndP) continue;
+
+                        if (donorTeam.avoidLocations.includes(followUpPatient.location) || targetTeam.avoidLocations.includes(hnpPatient.location)) continue;
+                        if (hnpPatient.type?.toLowerCase() === 'gyn' && donorTeam.prefersGynPatients && !targetTeam.prefersGynPatients) continue;
+                        if (hnpPatient.type?.toLowerCase() === 'sarcoma' && donorTeam.prefersSarcomaPatients && !targetTeam.prefersSarcomaPatients) continue;
+                        if (followUpPatient.type?.toLowerCase() === 'gyn' && targetTeam.prefersGynPatients && !donorTeam.prefersGynPatients) continue;
+                        if (followUpPatient.type?.toLowerCase() === 'sarcoma' && targetTeam.prefersSarcomaPatients && !donorTeam.prefersSarcomaPatients) continue;
+                        if (donorTeam.preferredLocations.some(pl => pl.location === hnpPatient.location && pl.priority === 1) && !targetTeam.preferredLocations.some(pl => pl.location === hnpPatient.location && pl.priority === 1)) continue;
+                        if (targetTeam.preferredLocations.some(pl => pl.location === followUpPatient.location && pl.priority === 1) && !donorTeam.preferredLocations.some(pl => pl.location === followUpPatient.location && pl.priority === 1)) continue;
+                        
+                        bestUpgradeSwap = { targetTeamId: targetTeam.id, donorTeamId: donorTeam.id, hnpPatientIndex: hnpIdx, fuName: followUpPatient.name, hnpName: hnpPatient.name, targetTeamName: targetTeam.teamName, donorTeamName: donorTeam.teamName, };
+                        break; 
+                    }
+                    if (bestUpgradeSwap) break; 
+                }
+                if (bestUpgradeSwap) break;
+            }
+
+            if (bestUpgradeSwap) {
+                console.log(`H&P UPGRADE SWAP Executed: ${bestUpgradeSwap.fuName} (from ${bestUpgradeSwap.targetTeamName}) <-> ${bestUpgradeSwap.hnpName} (from ${bestUpgradeSwap.donorTeamName})`);
+                const targetTeam = teams.find(t => t.id === bestUpgradeSwap.targetTeamId);
+                const donorTeam = teams.find(t => t.id === bestUpgradeSwap.donorTeamId);
+                const followUpData = targetTeam.currentPatientsThisSession[0];
+                const hnpData = donorTeam.currentPatientsThisSession[bestUpgradeSwap.hnpPatientIndex];
+                targetTeam.currentPatientsThisSession[0] = hnpData;
+                donorTeam.currentPatientsThisSession[bestUpgradeSwap.hnpPatientIndex] = followUpData;
+                targetTeam.needsHAndPThisSessionCount = 1;
+                donorTeam.needsHAndPThisSessionCount = donorTeam.currentPatientsThisSession.filter(p => p.needsHAndP).length;
+                upgradeSwapMade = true;
+                overallSwapMadeThisRun = true;
+            }
+
+            if (!upgradeSwapMade) {
+                console.log("--> No more H&P Upgrade swaps found.");
+                break;
+            }
+        }
+        console.log("-> H&P Upgrade Swap Sub-Phase finished.");
+
+
+        // --- H&P Downgrade Swap Sub-Phase ---
+        console.log("-> Running H&P Downgrade Swap Sub-Phase...");
+        for (let downgradeIter = 0; downgradeIter < 5; downgradeIter++) {
+            let downgradeSwapMade = false;
+            let bestDowngradeSwap = null;
+
+            const potentialDowngradeTeams = teams.filter(t =>
+                t.currentPatientsThisSession.length >= 2 &&
+                t.currentPatientsThisSession.some(p => p.needsHAndP)
+            );
+        
+            const potentialUpgradeTeams = teams.filter(t =>
+                t.currentPatientsThisSession.length === 1 &&
+                !t.currentPatientsThisSession[0].needsHAndP
+            );
+
+            if (potentialDowngradeTeams.length === 0 || potentialUpgradeTeams.length === 0) {
+                console.log("--> No eligible teams for H&P Downgrade/Upgrade swap.");
+                break;
+            }
+            
+            for (const downgradingTeam of potentialDowngradeTeams) {
+                for (const upgradingTeam of potentialUpgradeTeams) {
+                    if (downgradingTeam.id === upgradingTeam.id) continue;
+                    
+                    const followUpPatient = upgradingTeam.currentPatientsThisSession[0];
+
+                    for (let hnpIdx = 0; hnpIdx < downgradingTeam.currentPatientsThisSession.length; hnpIdx++) {
+                        const hnpPatient = downgradingTeam.currentPatientsThisSession[hnpIdx];
+                        if (!hnpPatient.needsHAndP) continue;
+
+                        if (hnpPatient.type?.toLowerCase() === 'gyn' && downgradingTeam.prefersGynPatients && !upgradingTeam.prefersGynPatients) continue;
+                        if (hnpPatient.type?.toLowerCase() === 'sarcoma' && downgradingTeam.prefersSarcomaPatients && !upgradingTeam.prefersSarcomaPatients) continue;
+                        if (followUpPatient.type?.toLowerCase() === 'gyn' && upgradingTeam.prefersGynPatients && !downgradingTeam.prefersGynPatients) continue;
+                        if (followUpPatient.type?.toLowerCase() === 'sarcoma' && upgradingTeam.prefersSarcomaPatients && !downgradingTeam.prefersSarcomaPatients) continue;
+                        if (downgradingTeam.preferredLocations.some(pl => pl.location === hnpPatient.location && pl.priority === 1) && !upgradingTeam.preferredLocations.some(pl => pl.location === hnpPatient.location && pl.priority === 1)) continue;
+                        if (upgradingTeam.preferredLocations.some(pl => pl.location === followUpPatient.location && pl.priority === 1) && !downgradingTeam.preferredLocations.some(pl => pl.location === followUpPatient.location && pl.priority === 1)) continue;
+                        
+                        bestDowngradeSwap = {
+                            downgradingTeamId: downgradingTeam.id,
+                            upgradingTeamId: upgradingTeam.id,
+                            hnpPatientIndex: hnpIdx,
+                            fuName: followUpPatient.name,
+                            hnpName: hnpPatient.name,
+                            downgradingTeamName: downgradingTeam.teamName,
+                            upgradingTeamName: upgradingTeam.teamName,
+                        };
+                        break; 
+                    }
+                    if (bestDowngradeSwap) break; 
+                }
+                if (bestDowngradeSwap) break;
+            }
+
+            if (bestDowngradeSwap) {
+                console.log(`H&P DOWNGRADE/UPGRADE SWAP Executed: ${bestDowngradeSwap.hnpName} (from ${bestDowngradeSwap.downgradingTeamName}) <-> ${bestDowngradeSwap.fuName} (from ${bestDowngradeSwap.upgradingTeamName})`);
+                
+                const downgradingTeam = teams.find(t => t.id === bestDowngradeSwap.downgradingTeamId);
+                const upgradingTeam = teams.find(t => t.id === bestDowngradeSwap.upgradingTeamId);
+
+                const hnpData = downgradingTeam.currentPatientsThisSession[bestDowngradeSwap.hnpPatientIndex];
+                const followUpData = upgradingTeam.currentPatientsThisSession[0];
+                
+                downgradingTeam.currentPatientsThisSession[bestDowngradeSwap.hnpPatientIndex] = followUpData;
+                upgradingTeam.currentPatientsThisSession[0] = hnpData;
+                
+                downgradingTeam.needsHAndPThisSessionCount = downgradingTeam.currentPatientsThisSession.filter(p => p.needsHAndP).length;
+                upgradingTeam.needsHAndPThisSessionCount = upgradingTeam.currentPatientsThisSession.filter(p => p.needsHAndP).length;
+
+                downgradeSwapMade = true;
+                overallSwapMadeThisRun = true;
+            }
+
+            if (!downgradeSwapMade) {
+                console.log("--> No more H&P Downgrade/Upgrade swaps found.");
+                break;
+            }
+        }
+        console.log("-> H&P Downgrade/Upgrade Swap Sub-Phase finished.");
+
+
+        // --- ORIGINAL General Preference Swap Phase ---
+        console.log("-> Running General Preference Swap Sub-Phase...");
+        for (let iter = 0; iter < maxSwapIterations; iter++) {
+            let swapMadeInThisIteration = false;
+            let bestSwapCandidate = null; 
+    
+            for (let i = 0; i < teams.length; i++) { 
+                for (let j = i + 1; j < teams.length; j++) { 
+                    const teamA = teams[i];
+                    const teamB = teams[j];
+    
+                    for (let p1Idx = 0; p1Idx < teamA.currentPatientsThisSession.length; p1Idx++) {
+                        const patient1 = teamA.currentPatientsThisSession[p1Idx];
+    
+                        for (let p2Idx = 0; p2Idx < teamB.currentPatientsThisSession.length; p2Idx++) {
+                            const patient2 = teamB.currentPatientsThisSession[p2Idx];
+    
+                            if (patient1.needsHAndP !== patient2.needsHAndP) continue;
+                            if (teamB.avoidLocations.includes(patient1.location) || teamA.avoidLocations.includes(patient2.location)) {
+                                continue;
+                            }
+
+                            if (patient1.type?.toLowerCase() === 'gyn' && teamA.prefersGynPatients && !teamB.prefersGynPatients) continue;
+                            if (patient2.type?.toLowerCase() === 'gyn' && teamB.prefersGynPatients && !teamA.prefersGynPatients) continue;
+
+                            if (patient1.type?.toLowerCase() === 'sarcoma' && teamA.prefersSarcomaPatients && !teamB.prefersSarcomaPatients) continue;
+                            if (patient2.type?.toLowerCase() === 'sarcoma' && teamB.prefersSarcomaPatients && !teamA.prefersSarcomaPatients) continue;
+                            
+                            const p1_on_TeamA_is_P1 = teamA.preferredLocations.some(pl => pl.location === patient1.location && pl.priority === 1);
+                            const p1_on_TeamB_is_P1 = teamB.preferredLocations.some(pl => pl.location === patient1.location && pl.priority === 1);
+                            if (p1_on_TeamA_is_P1 && !p1_on_TeamB_is_P1) continue;
+
+                            const p2_on_TeamB_is_P1 = teamB.preferredLocations.some(pl => pl.location === patient2.location && pl.priority === 1);
+                            const p2_on_TeamA_is_P1 = teamA.preferredLocations.some(pl => pl.location === patient2.location && pl.priority === 1);
+                            if (p2_on_TeamB_is_P1 && !p2_on_TeamA_is_P1) continue;
+    
+                            const currentScoreP1 = getSwapPatientScore(patient1, teamA);
+                            const currentScoreP2 = getSwapPatientScore(patient2, teamB);
+                            const potentialScoreP1onB = getSwapPatientScore(patient1, teamB);
+                            const potentialScoreP2onA = getSwapPatientScore(patient2, teamA);
+                            const netBenefit = (potentialScoreP1onB + potentialScoreP2onA) - (currentScoreP1 + currentScoreP2);
+    
+                            if (netBenefit > (bestSwapCandidate ? bestSwapCandidate.benefit : minBenefitThreshold -1) ) {
+                                bestSwapCandidate = {
+                                    teamAIdx: i, p1Idx: p1Idx, teamBIdx: j, p2Idx: p2Idx, benefit: netBenefit,
+                                    p1Name: patient1.name, p2Name: patient2.name, tAName: teamA.teamName, tBName: teamB.teamName
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+    
+            if (bestSwapCandidate) {
+                console.log(`PREFERENCE SWAP EXECUTED (Iter ${iter + 1}, Benefit: ${bestSwapCandidate.benefit.toFixed(0)}): ${bestSwapCandidate.p1Name} (from ${bestSwapCandidate.tAName}) <-> ${bestSwapCandidate.p2Name} (from ${bestSwapCandidate.tBName})`);
+                const { teamAIdx, p1Idx, teamBIdx, p2Idx } = bestSwapCandidate;
+    
+                const patient1Data = teams[teamAIdx].currentPatientsThisSession[p1Idx];
+                const patient2Data = teams[teamBIdx].currentPatientsThisSession[p2Idx];
+    
+                teams[teamAIdx].currentPatientsThisSession[p1Idx] = patient2Data;
+                teams[teamBIdx].currentPatientsThisSession[p2Idx] = patient1Data;
+                
+                teams[teamAIdx].needsHAndPThisSessionCount = teams[teamAIdx].currentPatientsThisSession.filter(p => p.needsHAndP).length;
+                teams[teamBIdx].needsHAndPThisSessionCount = teams[teamBIdx].currentPatientsThisSession.filter(p => p.needsHAndP).length;
+
+                swapMadeInThisIteration = true;
+                overallSwapMadeThisRun = true;
+                iter = -1; 
+            }
+    
+            if (!swapMadeInThisIteration && iter > -1) { 
+                console.log("--> No further general preference swaps found.");
+                break; 
+            }
+        }
+
+        if (!overallSwapMadeThisRun) console.log("Swap Phase: No swaps made in any sub-phase.");
+        return teams;
+    };
+    const fillUnderutilizedTeamsPhase = (teamsInput, capUtilizationThreshold = 0.6, maxHAndPProportion = 0.4, maxFillIterations = 5) => {
+        let teams = JSON.parse(JSON.stringify(teamsInput));
+        let overallMoveMadeInRun = false;
+        console.log("Starting Underutilized Team Fill-Up Phase...");
+    
+        for (let fillIter = 0; fillIter < maxFillIterations; fillIter++) {
+            let moveMadeThisPass = false;
+    
+            teams.forEach(team => { team.totalSlots = (team.startingPatientCount || 0) + team.currentPatientsThisSession.length; });
+    
+            const underutilizedTeams = teams.filter(t => t.totalSlots < t.cap && (t.totalSlots / t.cap) < capUtilizationThreshold)
+                                         .sort((a, b) => (a.totalSlots / a.cap) - (b.totalSlots / b.cap)); 
+            
+            const potentialDonorTeams = teams.filter(t => !underutilizedTeams.find(ut => ut.id === t.id) && t.currentPatientsThisSession.length > 0)
+                                           .sort((a, b) => b.totalSlots - a.totalSlots); 
+    
+            if (underutilizedTeams.length === 0 || potentialDonorTeams.length === 0) {
+                console.log("Fill-up Phase: No underutilized or no donor teams remaining in this iteration.");
+                break; 
+            }
+    
+            for (const targetTeam of underutilizedTeams) {
+                if (targetTeam.totalSlots >= targetTeam.cap) continue;
+    
+                let bestPatientToMoveFromAnyDonor = null; 
+    
+                for (const donorTeam of potentialDonorTeams) {
+                    if (donorTeam.id === targetTeam.id || donorTeam.currentPatientsThisSession.length === 0) continue;
+                    const avgSlots = teams.reduce((sum, t) => sum + t.totalSlots, 0) / teams.length;
+                    if (donorTeam.totalSlots <= targetTeam.totalSlots + 1 && !(donorTeam.totalSlots > avgSlots && targetTeam.totalSlots < avgSlots) ) continue;
+
+                    for (let pIdx = 0; pIdx < donorTeam.currentPatientsThisSession.length; pIdx++) {
+                        const patient = donorTeam.currentPatientsThisSession[pIdx];
+                        let moveScore = 0; 
+    
+                        if (targetTeam.avoidLocations.includes(patient.location)) continue;
+                        if (targetTeam.totalSlots + 1 > targetTeam.cap) continue;
+    
+                        const isGyn = patient.type?.toLowerCase() === 'gyn';
+                        const isSarcoma = patient.type?.toLowerCase() === 'sarcoma';
+
+                        if (isGyn && donorTeam.prefersGynPatients && !targetTeam.prefersGynPatients) moveScore -= 10000;
+                        else if (isGyn && !donorTeam.prefersGynPatients && targetTeam.prefersGynPatients) moveScore += 5000;
+                        else if (isGyn && donorTeam.prefersGynPatients && targetTeam.prefersGynPatients) moveScore += 1000;
+
+                        if (isSarcoma && donorTeam.prefersSarcomaPatients && !targetTeam.prefersSarcomaPatients) moveScore -= 10000;
+                        else if (isSarcoma && !donorTeam.prefersSarcomaPatients && targetTeam.prefersSarcomaPatients) moveScore += 5000;
+                        else if (isSarcoma && donorTeam.prefersSarcomaPatients && targetTeam.prefersSarcomaPatients) moveScore += 1000;
+
+                        const donorHasPref = donorTeam.preferredLocations.some(pl => pl.location === patient.location);
+                        const targetHasPref = targetTeam.preferredLocations.some(pl => pl.location === patient.location);
+                        if (donorHasPref && !targetHasPref) moveScore -= 2000;
+                        else if (!donorHasPref && targetHasPref) moveScore += 1000;
+                        
+                        const donorHasOther = donorTeam.otherLocations.includes(patient.location);
+                        const targetHasOther = targetTeam.otherLocations.includes(patient.location);
+                        if(donorHasOther && !targetHasOther && !targetHasPref) moveScore -=500;
+                        else if(!donorHasOther && targetHasOther) moveScore += 250;
+
+                        if (patient.needsHAndP) {
+                            const currentHPsOnTarget = targetTeam.currentPatientsThisSession.filter(p => p.needsHAndP).length;
+                            const projectedHPProportionOnTarget = (currentHPsOnTarget + 1) / (targetTeam.totalSlots + 1);
+                            if (projectedHPProportionOnTarget > maxHAndPProportion && currentHPsOnTarget >=1 ) moveScore -= 3000;
+                            if (currentHPsOnTarget === 0) moveScore += 200;
+                        }
+    
+                        if (!donorHasPref && !isGyn && !isSarcoma && !patient.needsHAndP && !donorHasOther) moveScore += 300; 
+    
+                        if (!bestPatientToMoveFromAnyDonor || moveScore > bestPatientToMoveFromAnyDonor.moveScore) {
+                            bestPatientToMoveFromAnyDonor = { patient, indexInDonor: pIdx, donorTeam, targetTeam, moveScore };
+                        }
+                    }
+                }
+    
+                if (bestPatientToMoveFromAnyDonor && bestPatientToMoveFromAnyDonor.moveScore > -1000) { 
+                    const { patient, indexInDonor, donorTeam, targetTeam: recipientTeam } = bestPatientToMoveFromAnyDonor; 
+                    console.log(`FILL-UP Executed (Iter ${fillIter + 1}, Score: ${bestPatientToMoveFromAnyDonor.moveScore.toFixed(0)}): ${patient.name} from ${donorTeam.teamName} to ${recipientTeam.teamName}`);
+                    
+                    donorTeam.currentPatientsThisSession.splice(indexInDonor, 1);
+                    recipientTeam.currentPatientsThisSession.push(patient);
+    
+                    [donorTeam, recipientTeam].forEach(t => {
+                        t.totalSlots = (t.startingPatientCount || 0) + t.currentPatientsThisSession.length;
+                        t.needsHAndPThisSessionCount = t.currentPatientsThisSession.filter(p => p.needsHAndP).length;
+                        t.currentLoad = t.currentPatientsThisSession.reduce((sum, p) => sum + (p.needsHAndP ? 2 : 1), 0);
+                    });
+    
+                    moveMadeThisPass = true;
+                    overallMoveMadeInRun = true;
+                    break; 
+                }
+            } 
+            
+            if (moveMadeThisPass) {
+                fillIter = -1; 
+                continue;
+            } else {
+                console.log(`Fill-up Phase: No suitable moves found in iteration ${fillIter + 1}.`);
+                break; 
+            }
+        } 
+    
+        if (!overallMoveMadeInRun) console.log("Fill-up Phase: No patients moved in any iteration.");
+        else console.log("Fill-up Phase completed.");
+        
+        teams.forEach(team => delete team.totalSlots); 
+        return teams;
+    };
+    const equalizeFinalCountsPhase = (teamsInput, maxIterations = 10) => {
+        let teams = JSON.parse(JSON.stringify(teamsInput));
+        let overallMoveMadeInRun = false;
+        console.log("Starting Final Count Equalization Phase...");
+    
+        for (let iter = 0; iter < maxIterations; iter++) {
+            let moveMadeInIteration = false;
+    
+            teams.forEach(team => {
+                team.cap = team.lowCap ? 10 : 16;
+                team.currentTotalSlots = (team.startingPatientCount || 0) + team.currentPatientsThisSession.length;
+                team.slotsFromCap = team.cap - team.currentTotalSlots;
+                team.needsHAndPThisSessionCount = team.currentPatientsThisSession.filter(p => p.needsHAndP).length;
+            });
+    
+            const nonLowCapTeams = teams.filter(t => !t.lowCap);
+            if (nonLowCapTeams.length <= 1) {
+                console.log("Equalization Phase: Not enough non-low-cap teams to equalize.");
+                break;
+            }
+    
+            const nonLowCapSlotsFromCap = nonLowCapTeams.map(t => t.slotsFromCap);
+            const minSlotsFromCap = Math.min(...nonLowCapSlotsFromCap);
+            const maxSlotsFromCap = Math.max(...nonLowCapSlotsFromCap);
+    
+            if (maxSlotsFromCap - minSlotsFromCap <= 1) {
+                console.log(`Equalization Phase (Iter ${iter + 1}): Non-low-cap teams are balanced (slots from cap diff <= 1).`);
+                break;
+            }
+    
+            const potentialDonors = nonLowCapTeams.filter(t => t.slotsFromCap === minSlotsFromCap && t.currentPatientsThisSession.length > 0)
+                                        .sort((a, b) => a.currentLoad - b.currentLoad);
+    
+            const potentialRecipients = teams.filter(t =>
+                t.currentTotalSlots < t.cap &&
+                ((!t.lowCap && t.slotsFromCap === maxSlotsFromCap) || (t.lowCap))
+            ).sort((a, b) => b.slotsFromCap - a.slotsFromCap);
+    
+            if (potentialDonors.length === 0 || potentialRecipients.length === 0) {
+                console.log(`Equalization Phase (Iter ${iter + 1}): No suitable donor/recipient groups.`);
+                break;
+            }
+    
+            let bestMoveDetails = null;
+            let highestMovePriority = -Infinity;
+    
+            donorLoop:
+            for (const currentDonor of potentialDonors) {
+                recipientLoop:
+                for (const currentRecipient of potentialRecipients) {
+                    if (currentDonor.id === currentRecipient.id) continue;
+                    if (currentRecipient.currentTotalSlots >= currentRecipient.cap) continue;
+    
+                    for (let pIdx = 0; pIdx < currentDonor.currentPatientsThisSession.length; pIdx++) {
+                        const patient = currentDonor.currentPatientsThisSession[pIdx];
+                        let currentMovePriority = 50000;
+    
+                        if (patient.needsHAndP) {
+                            if (currentRecipient.needsHAndPThisSessionCount >= 2) { currentMovePriority = -Infinity; break; }
+                            else currentMovePriority += 2000;
+                        }
+                        if (currentMovePriority === -Infinity) continue;
+    
+                        const isGyn = patient.type?.toLowerCase() === 'gyn';
+                        const isSarcoma = patient.type?.toLowerCase() === 'sarcoma';
+                        if (isGyn) {
+                            if (currentDonor.prefersGynPatients && !currentRecipient.prefersGynPatients) { currentMovePriority = -Infinity; break; }
+                            if (!currentDonor.prefersGynPatients && currentRecipient.prefersGynPatients) currentMovePriority += 10000;
+                        } else {
+                            if (!currentDonor.prefersGynPatients && currentRecipient.prefersGynPatients) currentMovePriority -= 1000;
+                        }
+                        if(currentMovePriority === -Infinity) continue;
+
+                        if (isSarcoma) {
+                            if (currentDonor.prefersSarcomaPatients && !currentRecipient.prefersSarcomaPatients) { currentMovePriority = -Infinity; break; }
+                            if (!currentDonor.prefersSarcomaPatients && currentRecipient.prefersSarcomaPatients) currentMovePriority += 10000;
+                        } else {
+                            if (!currentDonor.prefersSarcomaPatients && currentRecipient.prefersSarcomaPatients) currentMovePriority -= 1000;
+                        }
+                        if (currentMovePriority === -Infinity) continue;
+    
+                        const donorIsP1 = currentDonor.preferredLocations.some(pl => pl.location === patient.location && pl.priority === 1);
+                        const recipientIsP1 = currentRecipient.preferredLocations.some(pl => pl.location === patient.location && pl.priority === 1);
+                        
+                        if (!donorIsP1 && recipientIsP1) currentMovePriority += 8000;
+    
+                        const donorIsP23 = currentDonor.preferredLocations.some(pl => pl.location === patient.location && pl.priority > 1);
+                        const recipientIsP23 = currentRecipient.preferredLocations.some(pl => pl.location === patient.location && pl.priority > 1);
+                        if (donorIsP23 && !recipientIsP23 && !recipientIsP1) currentMovePriority -= 500;
+                        else if (!donorIsP23 && recipientIsP23) currentMovePriority += 250;
+    
+                        if (currentMovePriority > highestMovePriority) {
+                            highestMovePriority = currentMovePriority;
+                            bestMoveDetails = { patient, indexInDonor: pIdx, donorTeam: currentDonor, recipientTeam: currentRecipient };
+                        }
+                    }
+                    if (highestMovePriority === -Infinity && bestMoveDetails?.donorTeam.id === currentDonor.id && bestMoveDetails?.recipientTeam.id === currentRecipient.id) {
+                        bestMoveDetails = null;
+                        highestMovePriority = -Infinity;
+                        continue recipientLoop;
+                    }
+                }
+                if (highestMovePriority === -Infinity && bestMoveDetails?.donorTeam.id === currentDonor.id) {
+                    bestMoveDetails = null;
+                    highestMovePriority = -Infinity;
+                    continue donorLoop;
+                }
+            }
+    
+            if (bestMoveDetails && highestMovePriority > -Infinity) {
+                const { patient, indexInDonor, donorTeam: actualDonor, recipientTeam: actualRecipient } = bestMoveDetails;
+                console.log(`EQUALIZATION Executed (Iter ${iter + 1}, Score: ${highestMovePriority.toFixed(0)}): Moving ${patient.name} from ${actualDonor.teamName} (had ${actualDonor.currentTotalSlots}) to ${actualRecipient.teamName} (had ${actualRecipient.currentTotalSlots})`);
+    
+                actualDonor.currentPatientsThisSession.splice(indexInDonor, 1);
+                actualRecipient.currentPatientsThisSession.push(patient);
+    
+                [actualDonor, actualRecipient].forEach(t => {
+                    t.currentTotalSlots = (t.startingPatientCount || 0) + t.currentPatientsThisSession.length;
+                    t.needsHAndPThisSessionCount = t.currentPatientsThisSession.filter(p => p.needsHAndP).length;
+                    t.currentLoad = t.currentPatientsThisSession.reduce((sum, p) => sum + (p.needsHAndP ? 2 : 1), 0);
+                });
+                moveMadeInIteration = true;
+                overallMoveMadeInRun = true;
+            }
+    
+            if (!moveMadeInIteration) {
+                console.log(`Equalization Phase: No beneficial moves found in iteration ${iter + 1}.`);
+                break;
+            }
+        }
+        if (!overallMoveMadeInRun) console.log("Equalization Phase: No patients moved in any iteration.");
+        else console.log("Equalization Phase completed.");
+    
+        teams.forEach(team => {
+             delete team.currentTotalSlots;
+             delete team.slotsFromCap;
+             delete team.cap;
+        });
+        return teams;
+    };
+    const balanceNewPatientWorkloadPhase = (teamsInput, maxIterations = 5) => {
+        let teams = JSON.parse(JSON.stringify(teamsInput));
+        let overallMoveMade = false;
+        console.log("Starting New Patient Workload Balancing Phase...");
+    
+        for (let iter = 0; iter < maxIterations; iter++) {
+            let moveMadeInIteration = false;
+            let bestMove = null;
+            let highestBenefit = 0;
+    
+            teams.forEach(team => {
+                team.cap = team.lowCap ? 10 : 16;
+                team.currentTotalSlots = (team.startingPatientCount || 0) + team.currentPatientsThisSession.length;
+                team.newPatientCount = team.currentPatientsThisSession.length;
+            });
+    
+            const nonLowCapTeams = teams.filter(t => !t.lowCap);
+    
+            for (const donor of teams) {
+                for (const recipient of teams) {
+                    if (donor.id === recipient.id) continue;
+                    if (recipient.currentTotalSlots >= recipient.cap) continue;
+    
+                    if (donor.newPatientCount <= recipient.newPatientCount) continue;
+    
+                    let isDonorNonLowCap = nonLowCapTeams.some(t => t.id === donor.id);
+                    let isRecipientNonLowCap = nonLowCapTeams.some(t => t.id === recipient.id);
+
+                    if (isDonorNonLowCap || isRecipientNonLowCap) {
+                        let tempSlots = nonLowCapTeams.map(t => {
+                            let slots = t.cap - ((t.startingPatientCount || 0) + t.currentPatientsThisSession.length);
+                            if (t.id === donor.id) return slots + 1;
+                            if (t.id === recipient.id) return slots - 1;
+                            return slots;
+                        });
+
+                        const newMax = Math.max(...tempSlots);
+                        const newMin = Math.min(...tempSlots);
+    
+                        if (newMax - newMin > 1) {
+                            continue;
+                        }
+                    }
+
+                    const patientsToConsider = donor.currentPatientsThisSession.filter(p => !p.needsHAndP);
+    
+                    for (const patient of patientsToConsider) {
+                        let moveScore = 1000; 
+    
+                        if (recipient.avoidLocations.includes(patient.location)) continue;
+                        const isGyn = patient.type?.toLowerCase() === 'gyn';
+                        if (isGyn && donor.prefersGynPatients && !recipient.prefersGynPatients) continue;
+                        const isSarcoma = patient.type?.toLowerCase() === 'sarcoma';
+                        if (isSarcoma && donor.prefersSarcomaPatients && !recipient.prefersSarcomaPatients) continue;
+    
+                        if (isGyn && !donor.prefersGynPatients && recipient.prefersGynPatients) moveScore += 200;
+                        if (isSarcoma && !donor.prefersSarcomaPatients && recipient.prefersSarcomaPatients) moveScore += 200;
+                        
+                        const donorIsP1 = donor.preferredLocations.some(pl => pl.location === patient.location && pl.priority === 1);
+                        if (donorIsP1) moveScore -= 500; 
+                        
+                        const recipientIsP1 = recipient.preferredLocations.some(pl => pl.location === patient.location && pl.priority === 1);
+                        if (!donorIsP1 && recipientIsP1) moveScore += 400;
+
+                        const benefit = moveScore + (donor.newPatientCount - recipient.newPatientCount) * 100;
+    
+                        if (benefit > highestBenefit) {
+                            highestBenefit = benefit;
+                            bestMove = {
+                                patient,
+                                donor,
+                                recipient,
+                                patientIndex: donor.currentPatientsThisSession.findIndex(p => p.originalPatientId === patient.originalPatientId)
+                            };
+                        }
+                    }
+                }
+            }
+    
+            if (bestMove) {
+                const { patient, donor, recipient, patientIndex } = bestMove;
+                console.log(`WORKLOAD BALANCE Executed (Iter ${iter + 1}, Benefit: ${highestBenefit.toFixed(0)}): Moving F/U patient ${patient.name} from ${donor.teamName} (had ${donor.newPatientCount} new) to ${recipient.teamName} (had ${recipient.newPatientCount} new)`);
+    
+                const donorInArray = teams.find(t => t.id === donor.id);
+                const recipientInArray = teams.find(t => t.id === recipient.id);
+    
+                const [movedPatient] = donorInArray.currentPatientsThisSession.splice(patientIndex, 1);
+                recipientInArray.currentPatientsThisSession.push(movedPatient);
+    
+                moveMadeInIteration = true;
+                overallMoveMade = true;
+            }
+    
+            if (!moveMadeInIteration) {
+                console.log(`Workload Balancing: No further moves found in iteration ${iter + 1}.`);
+                break;
+            }
+        }
+    
+        if (!overallMoveMade) {
+            console.log("Workload Balancing Phase: No moves made, workload was already optimal or unmovable.");
+        }
+    
+        teams.forEach(team => {
+            delete team.cap;
+            delete team.currentTotalSlots;
+            delete team.newPatientCount;
+        });
+    
+        return teams;
+    }
+    const assignPatientsLogic = (currentTeams, currentUnassignedPatients) => {
+        let teamsCopy = JSON.parse(JSON.stringify(currentTeams)).map(team => ({
+            ...team,
+            cap: team.lowCap ? 10 : 16,
+            currentPatientsThisSession: [], 
+            currentLoad: 0, 
+            needsHAndPThisSessionCount: 0,
+            newPatientsThisSessionCount: 0, 
+        }));
+
+        let patientsToProcess = JSON.parse(JSON.stringify(currentUnassignedPatients));
+        const newlyAssignedPatientsLog = [];
+        let assignedPatientIdsThisRun = new Set(); 
+
+        const assignPatientToTeam = (patient, team, score, phase) => {
+            const teamToUpdate = teamsCopy.find(t => t.id === team.id);
+            const patientDataForTeam = { 
+                name: patient.patientName, 
+                location: patient.currentLocation, 
+                type: patient.patientType || '', 
+                needsHAndP: patient.needsHAndP || false,
+                originalPatientId: patient.id 
+            };
+            
+            teamToUpdate.currentPatientsThisSession.push(patientDataForTeam);
+            teamToUpdate.newPatientsThisSessionCount += 1;
+            teamToUpdate.currentLoad += (patient.needsHAndP ? 2 : 1); 
+            if (patient.needsHAndP) {
+                teamToUpdate.needsHAndPThisSessionCount += 1;
+            }
+            newlyAssignedPatientsLog.push({ ...patient, assignedTeamName: team.teamName, assignmentScore: score, phase });
+            assignedPatientIdsThisRun.add(patient.id);
+        };
+
+        let sarcomaPatientsToProcess = patientsToProcess.filter(p => p.patientType?.toLowerCase() === 'sarcoma' && !assignedPatientIdsThisRun.has(p.id));
+        sarcomaPatientsToProcess.sort((a,b) => a.patientName.localeCompare(b.patientName));
+
+        for (const patient of sarcomaPatientsToProcess) {
+            if (assignedPatientIdsThisRun.has(patient.id)) continue;
+            const sarcomaPreferredTeams = teamsCopy.filter(t => t.prefersSarcomaPatients);
+            if (sarcomaPreferredTeams.length > 0) {
+                const result = findBestTeamForPatient(patient, sarcomaPreferredTeams, { phase: 'sarcoma', relaxAvoid: false }, teamsCopy);
+                if (result.bestTeam) {
+                    assignPatientToTeam(patient, result.bestTeam, result.highestScore, 'Sarcoma-Preferred');
+                }
+            }
+        }
+        patientsToProcess = patientsToProcess.filter(p => !assignedPatientIdsThisRun.has(p.id));
+
+
+        let gynPatientsToProcess = patientsToProcess.filter(p => p.patientType?.toLowerCase() === 'gyn' && !assignedPatientIdsThisRun.has(p.id));
+        gynPatientsToProcess.sort((a,b) => a.patientName.localeCompare(b.patientName)); 
+
+        for (const patient of gynPatientsToProcess) {
+            if (assignedPatientIdsThisRun.has(patient.id)) continue;
+            const gynPreferredTeams = teamsCopy.filter(t => t.prefersGynPatients);
+            if (gynPreferredTeams.length > 0) {
+                const result = findBestTeamForPatient(patient, gynPreferredTeams, { phase: 'gyn', relaxAvoid: false }, teamsCopy);
+                if (result.bestTeam) {
+                    assignPatientToTeam(patient, result.bestTeam, result.highestScore, 'Gyn-Preferred');
+                }
+            }
+        }
+        patientsToProcess = patientsToProcess.filter(p => !assignedPatientIdsThisRun.has(p.id));
+
+        let prefLocPatientsToProcess = [...patientsToProcess]; 
+        prefLocPatientsToProcess.sort((a,b) => a.patientName.localeCompare(b.patientName));
+
+        for (const patient of prefLocPatientsToProcess) {
+            if (assignedPatientIdsThisRun.has(patient.id)) continue;
+            const suitablePrefLocationTeams = teamsCopy.filter(team => 
+                team.preferredLocations.some(pl => pl.location === patient.currentLocation)
+            );
+            if (suitablePrefLocationTeams.length > 0) {
+                 const result = findBestTeamForPatient(patient, suitablePrefLocationTeams, { phase: 'prefLoc', relaxAvoid: false }, teamsCopy);
+                 if (result.bestTeam) {
+                    assignPatientToTeam(patient, result.bestTeam, result.highestScore, 'Preferred-Location');
+                 }
+            }
+        }
+        patientsToProcess = patientsToProcess.filter(p => !assignedPatientIdsThisRun.has(p.id)); 
+
+        let generalPassPatients = [...patientsToProcess];
+        let iterationNeeded = true;
+        while(iterationNeeded && generalPassPatients.length > 0) {
+            iterationNeeded = false;
+            let notAssignedThisIteration = [];
+            generalPassPatients.sort((a,b) => a.patientName.localeCompare(b.patientName)); 
+
+            for (const patient of generalPassPatients) {
+                if (assignedPatientIdsThisRun.has(patient.id)) continue;
+                const result = findBestTeamForPatient(patient, teamsCopy, { phase: 'general', relaxAvoid: false }, teamsCopy);
+                if (result.bestTeam) {
+                    assignPatientToTeam(patient, result.bestTeam, result.highestScore, 'General-StrictAvoid');
+                    iterationNeeded = true; 
+                } else {
+                    notAssignedThisIteration.push(patient);
+                }
+            }
+            generalPassPatients = notAssignedThisIteration;
+        }
+        patientsToProcess = generalPassPatients; 
+
+        if (patientsToProcess.length > 0) {
+            console.log("Entering Relaxed Avoid general pass for remaining patients:", patientsToProcess.map(p=>p.patientName));
+            generalPassPatients = [...patientsToProcess];
+            iterationNeeded = true;
+            while(iterationNeeded && generalPassPatients.length > 0) {
+                iterationNeeded = false;
+                let notAssignedThisIteration = [];
+                generalPassPatients.sort((a,b) => a.patientName.localeCompare(b.patientName));
+
+                for (const patient of generalPassPatients) {
+                    if (assignedPatientIdsThisRun.has(patient.id)) continue;
+                    const result = findBestTeamForPatient(patient, teamsCopy, { phase: 'general', relaxAvoid: true }, teamsCopy);
+                    if (result.bestTeam) {
+                        assignPatientToTeam(patient, result.bestTeam, result.highestScore, 'General-RelaxedAvoid');
+                        iterationNeeded = true;
+                    } else {
+                        notAssignedThisIteration.push(patient);
+                    }
+                }
+                generalPassPatients = notAssignedThisIteration;
+            }
+            patientsToProcess = generalPassPatients; 
+        }
+        
+        return { teamsWithAssignments: teamsCopy, newlyAssignedPatientsLog, remainingUnassigned: patientsToProcess };
+    };
+
+
+    const runAssignmentProcess = () => {
+        if (teams.length === 0) return displayGeneralModal("Add teams first.");
+        if (unassignedPatients.length === 0) return displayGeneralModal("No unassigned patients.");
+
+        setLoadingState(true);
+        assignmentReportData = [];
+        teamAssignmentSummaryData = [];
+        
+        previousTeamsState = JSON.parse(JSON.stringify(teams));
+        previousUnassignedPatientsState = JSON.parse(JSON.stringify(unassignedPatients));
+        
+        const { teamsWithAssignments, newlyAssignedPatientsLog, remainingUnassigned } = assignPatientsLogic(teams, unassignedPatients);
+        
+        let finalTeamsState = teamsWithAssignments;
+        if (finalTeamsState && finalTeamsState.length > 0) {
+            finalTeamsState = fillUnderutilizedTeamsPhase(finalTeamsState);
+        }
+        if (finalTeamsState && finalTeamsState.length > 0) { 
+            finalTeamsState = equalizeFinalCountsPhase(finalTeamsState);
+        }
+        if (finalTeamsState && finalTeamsState.length > 0) {
+            finalTeamsState = balanceNewPatientWorkloadPhase(finalTeamsState);
+        }
+        if (finalTeamsState && finalTeamsState.length > 0) {
+            finalTeamsState = swapPhaseLogic(finalTeamsState); 
+        }
+
+        // Update main state
+        teams.forEach(originalTeam => {
+            const finalTeam = finalTeamsState.find(t => t.id === originalTeam.id);
+            if(finalTeam) {
+                originalTeam.currentPatients = finalTeam.currentPatientsThisSession.map(p => ({
+                    name: p.name, location: p.location, type: p.type, needsHAndP: p.needsHAndP
+                }));
+            }
+        });
+        unassignedPatients = remainingUnassigned;
+
+        // Create reports
+        assignmentReportData = newlyAssignedPatientsLog.map(logEntry => ({ 
+            admittingTeam: logEntry.admittingTeam || 'N/A', 
+            patientName: logEntry.patientName, 
+            assignedTeamName: logEntry.assignedTeamName,
+            phase: logEntry.phase 
+        })).sort((a,b) => { 
+            if (a.admittingTeam.toLowerCase() < b.admittingTeam.toLowerCase()) return -1; 
+            if (a.admittingTeam.toLowerCase() > b.admittingTeam.toLowerCase()) return 1; 
+            if (a.patientName.toLowerCase() < b.patientName.toLowerCase()) return -1; 
+            if (a.patientName.toLowerCase() > b.patientName.toLowerCase()) return 1; 
+            return 0; 
+        });
+
+        teamAssignmentSummaryData = finalTeamsState.map(team => {
+            const newlyAssignedPatientsList = team.currentPatientsThisSession;
+            const newPatientsCount = newlyAssignedPatientsList.length;
+            const followUpsList = newlyAssignedPatientsList.filter(p => !p.needsHAndP);
+            const needsHAndPList = newlyAssignedPatientsList.filter(p => p.needsHAndP);
+            const totalPatientsAfterAssignment = (team.startingPatientCount || 0) + newPatientsCount;
+            let detailString = newPatientsCount > 0 ? `, ${followUpsList.length} follow-ups, ${needsHAndPList.length} H&P(s) (${needsHAndPList.map(p => p.name).join(', ')})` : "";
+            if (newPatientsCount > 0) {
+                 let parts = [];
+                if (followUpsList.length > 0) parts.push(`follow-ups: ${followUpsList.length}`);
+                if (needsHAndPList.length > 0) parts.push(`needs H&P: ${needsHAndPList.length} (${needsHAndPList.map(p => p.name).join(', ')})`);
+                if (parts.length > 0) detailString = `, ${parts.join(', ')}`;
+            }
+            return { 
+                teamName: team.teamName, startingAmount: team.startingPatientCount || 0, 
+                newlyAssignedCount: newPatientsCount, totalPatients: totalPatientsAfterAssignment, detailString
+            };
+        }).sort((a, b) => a.teamName.localeCompare(b.teamName));
+
+        assignmentPerformedInSession = true;
+        renderAll();
+        
+        // Final message
+        if (remainingUnassigned.length > 0) {
+            const allTeamsCapped = finalTeamsState.every(team => (team.startingPatientCount + team.currentPatientsThisSession.length) >= (team.lowCap ? 10 : 16));
+            const message = allTeamsCapped ? "Assignment complete. All teams appear capped. Some patients remain unassigned and may require overcapping teams or calling backup." : "Assignment complete. Some patients remain unassigned:";
+            const remainingList = document.createElement('ul');
+            remainingList.className = 'text-left text-sm max-h-40 overflow-y-auto';
+            remainingUnassigned.forEach(p => {
+                const li = document.createElement('li');
+                li.innerHTML = `${p.patientName} (${p.currentLocation}) ${p.needsHAndP ? '<span class="font-bold text-red-600"> (Needs H&P)</span>' : ''}`;
+                remainingList.appendChild(li);
+            });
+            displayGeneralModal(message, null, remainingList);
+        } else {
+            displayGeneralModal("All patients assigned successfully!");
+        }
+        
+        setLoadingState(false);
+    };
+    
+    // --- EVENT LISTENERS & INITIALIZATION ---
+    
+    // Edit/Add Teams Modal Logic
+    const editTeamsModalTitle = document.getElementById('edit-teams-modal-title');
+    const teamFormName = document.getElementById('team-form-name');
+    const teamFormStartCount = document.getElementById('team-form-start-count');
+    const teamFormPrefLoc = document.getElementById('team-form-pref-loc');
+    const teamFormOtherLoc = document.getElementById('team-form-other-loc');
+    const teamFormAvoidLoc = document.getElementById('team-form-avoid-loc');
+    const teamFormGyn = document.getElementById('team-form-gyn');
+    const teamFormSarcoma = document.getElementById('team-form-sarcoma');
+    const teamFormLowCap = document.getElementById('team-form-low-cap');
+    const teamFormOtherPref = document.getElementById('team-form-other-pref');
+    const teamFormSaveBtn = document.getElementById('team-form-save');
+    const teamFormDeleteBtn = document.getElementById('team-form-delete');
+    const teamFormClearBtn = document.getElementById('team-form-clear');
+    const editTeamsList = document.getElementById('edit-teams-list');
+
+    const populateTeamForm = (team) => {
+        editingTeam = team;
+        teamFormName.value = team.teamName;
+        teamFormStartCount.value = team.startingPatientCount;
+        teamFormPrefLoc.value = formatLocationsWithPriority(team.preferredLocations);
+        teamFormOtherLoc.value = (team.otherLocations || []).join(', ');
+        teamFormAvoidLoc.value = (team.avoidLocations || []).join(', ');
+        teamFormGyn.checked = team.prefersGynPatients;
+        teamFormSarcoma.checked = team.prefersSarcomaPatients;
+        teamFormLowCap.checked = team.lowCap;
+        teamFormOtherPref.value = team.otherPreferences;
+        
+        if (team.id) {
+            editTeamsModalTitle.textContent = `Edit Team: ${team.teamName}`;
+            teamFormDeleteBtn.classList.remove('hidden');
+        } else {
+            editTeamsModalTitle.textContent = 'Add New Team';
+            teamFormDeleteBtn.classList.add('hidden');
+        }
+    };
+    
+    const clearTeamForm = () => {
+        populateTeamForm(JSON.parse(JSON.stringify(initialTeamFormState)));
+    }
+
+    const renderEditTeamsList = () => {
+        editTeamsList.innerHTML = '';
+        if (teams.length > 0) {
+            teams.forEach(t => {
+                const li = document.createElement('li');
+                li.className = "flex justify-between items-center p-2 border rounded-md hover:bg-gray-50";
+                li.innerHTML = `
+                    <span>${t.teamName} (Starts: ${t.startingPatientCount}) ${t.lowCap ? `<span class="text-xs bg-yellow-200 text-yellow-800 px-1 py-0.5 rounded-sm ml-1">LowCap</span>` : ''}</span>
+                    <div>
+                        <button data-team-id="${t.id}" class="text-blue-500 hover:text-blue-700 mr-2 text-sm edit-team-from-list-btn">Edit</button>
+                        <button data-team-id="${t.id}" data-team-name="${t.teamName}" class="text-red-500 hover:text-red-700 text-sm delete-team-from-list-btn">Delete</button>
+                    </div>`;
+                editTeamsList.appendChild(li);
+            });
+        } else {
+            editTeamsList.innerHTML = `<p class="text-gray-500">No teams yet. Add one or load defaults.</p>`;
+        }
+    }
+    
+    const saveTeamFromModal = () => {
+        const teamName = teamFormName.value.trim();
+        if (!teamName) return displayGeneralModal("Team name is required.");
+        
+        const teamData = {
+            teamName: teamName,
+            startingPatientCount: parseInt(teamFormStartCount.value, 10) || 0,
+            preferredLocations: parseLocationsWithPriority(teamFormPrefLoc.value),
+            otherLocations: teamFormOtherLoc.value.split(',').map(loc => loc.trim()).filter(Boolean),
+            avoidLocations: teamFormAvoidLoc.value.split(',').map(loc => loc.trim()).filter(Boolean),
+            prefersGynPatients: teamFormGyn.checked,
+            prefersSarcomaPatients: teamFormSarcoma.checked,
+            lowCap: teamFormLowCap.checked,
+            otherPreferences: teamFormOtherPref.value.trim(),
+        };
+
+        if (editingTeam && editingTeam.id) {
+            // Update existing team
+            const index = teams.findIndex(t => t.id === editingTeam.id);
+            if (index !== -1) {
+                teams[index] = { ...teams[index], ...teamData };
+                displayGeneralModal(`Team "${teamName}" updated.`);
+            }
+        } else {
+            // Add new team
+            teams.push({ ...teamData, id: `team_${Date.now()}`, currentPatients: [] });
+            displayGeneralModal(`Team "${teamName}" added.`);
+        }
+        clearTeamForm();
+        renderTeams();
+        renderEditTeamsList();
+    };
+    
+    const deleteTeam = (teamId, teamName) => {
+        displayGeneralModal(`Are you sure you want to delete team "${teamName}"?`, () => {
+            const teamToDelete = teams.find(t => t.id === teamId);
+            if (teamToDelete?.currentPatients?.length > 0) {
+                 teamToDelete.currentPatients.forEach(p => {
+                    unassignedPatients.push({
+                         id: `patient_${Date.now()}_${Math.random()}`,
+                         patientName: p.name, currentLocation: p.location,
+                         admittingTeam: 'N/A (from deleted team)',
+                         patientType: p.type, needsHAndP: p.needsHAndP,
+                    });
+                });
+            }
+            teams = teams.filter(t => t.id !== teamId);
+            displayGeneralModal(`Team "${teamName}" deleted.`);
+            if (editingTeam && editingTeam.id === teamId) {
+                clearTeamForm();
+            }
+            renderAll();
+            renderEditTeamsList();
+        });
+    };
+
+    // Edit Default Teams Modal
+    const editDefaultFormContainer = document.getElementById('edit-default-form-container');
+    const editDefaultListContainer = document.getElementById('edit-default-list-container');
+    
+    const renderEditDefaultTeamsList = () => {
+        editDefaultListContainer.innerHTML = '';
+        sessionDefaultTeams.forEach((team, index) => {
+            const teamDiv = document.createElement('div');
+            teamDiv.className = "p-3 border rounded-md flex justify-between items-center hover:bg-gray-50";
+            teamDiv.innerHTML = `
+                <div>
+                    <p class="font-semibold">${team.teamName} <span class="text-xs text-gray-500">(Starts: ${team.startingPatientCount})</span></p>
+                    <p class="text-xs">Prefs: ${formatLocationsWithPriority(team.preferredLocations) || 'None'}</p>
+                </div>
+                <button data-index="${index}" class="btn-neutral btn-small-action edit-single-default-btn">Edit Default</button>
+            `;
+            editDefaultListContainer.appendChild(teamDiv);
+        });
+    };
+
+    const populateDefaultTeamForm = (team, index) => {
+        editingSingleDefaultTeam = { ...team, originalIndex: index };
+        editDefaultFormContainer.innerHTML = `
+            <div class="border p-4 rounded-md bg-gray-50 mb-4">
+                <h3 class="text-lg font-semibold mb-2">Editing: ${team.teamName}</h3>
+                <div class="space-y-2 text-left">
+                    <div><label class="label-text">Team Name:</label><input type="text" class="input-field" id="default-form-name" value="${team.teamName}"/></div>
+                    <div><label class="label-text">Starting Count:</label><input type="number" class="input-field" id="default-form-start-count" value="${team.startingPatientCount}"/></div>
+                    <div><label class="label-text">Preferred Locations:</label><input type="text" class="input-field" id="default-form-pref-loc" value="${formatLocationsWithPriority(team.preferredLocations)}"/></div>
+                    <div><label class="label-text">Other Locations:</label><input type="text" class="input-field" id="default-form-other-loc" value="${(team.otherLocations||[]).join(', ')}"/></div>
+                    <div><label class="label-text">Avoid Locations:</label><input type="text" class="input-field" id="default-form-avoid-loc" value="${(team.avoidLocations||[]).join(', ')}"/></div>
+                    <div class="flex items-center"><input type="checkbox" id="default-form-gyn" class="mr-2" ${team.prefersGynPatients ? 'checked' : ''}/><label class="label-text mb-0">Prefers Gyn</label></div>
+                    <div class="flex items-center"><input type="checkbox" id="default-form-sarcoma" class="mr-2" ${team.prefersSarcomaPatients ? 'checked' : ''}/><label class="label-text mb-0">Prefers Sarcoma</label></div>
+                    <div class="flex items-center"><input type="checkbox" id="default-form-low-cap" class="mr-2" ${team.lowCap ? 'checked' : ''}/><label class="label-text mb-0">Low Cap</label></div>
+                    <div><label class="label-text">Other Preferences:</label><textarea class="input-field" rows="2" id="default-form-other-pref">${team.otherPreferences}</textarea></div>
+                </div>
+                <div class="mt-4 flex justify-end space-x-2">
+                    <button id="cancel-edit-default-btn" class="btn-neutral">Cancel Edit</button>
+                    <button id="save-default-btn" data-index="${index}" class="btn-primary">Save This Default</button>
+                </div>
+            </div>`;
+        editDefaultFormContainer.classList.remove('hidden');
+        editDefaultListContainer.classList.add('hidden');
+
+        document.getElementById('cancel-edit-default-btn').onclick = () => {
+             editDefaultFormContainer.classList.add('hidden');
+             editDefaultListContainer.classList.remove('hidden');
+             editingSingleDefaultTeam = null;
+        };
+        document.getElementById('save-default-btn').onclick = saveIndividualDefaultTeamChanges;
+    };
+    
+    const saveIndividualDefaultTeamChanges = (e) => {
+        const index = e.target.dataset.index;
+        const teamToSave = sessionDefaultTeams[index];
+        
+        teamToSave.teamName = document.getElementById('default-form-name').value;
+        teamToSave.startingPatientCount = parseInt(document.getElementById('default-form-start-count').value, 10) || 0;
+        teamToSave.preferredLocations = parseLocationsWithPriority(document.getElementById('default-form-pref-loc').value);
+        teamToSave.otherLocations = document.getElementById('default-form-other-loc').value.split(',').map(l => l.trim()).filter(Boolean);
+        teamToSave.avoidLocations = document.getElementById('default-form-avoid-loc').value.split(',').map(l => l.trim()).filter(Boolean);
+        teamToSave.prefersGynPatients = document.getElementById('default-form-gyn').checked;
+        teamToSave.prefersSarcomaPatients = document.getElementById('default-form-sarcoma').checked;
+        teamToSave.lowCap = document.getElementById('default-form-low-cap').checked;
+        teamToSave.otherPreferences = document.getElementById('default-form-other-pref').value;
+        
+        displayGeneralModal(`Default for Team "${teamToSave.teamName}" updated for this session.`);
+        editDefaultFormContainer.classList.add('hidden');
+        editDefaultListContainer.classList.remove('hidden');
+        renderEditDefaultTeamsList();
+        editingSingleDefaultTeam = null;
+    }
+
+    // Main event listener for delegated events
+    document.body.addEventListener('click', (e) => {
+        // Patient Delete
+        if (e.target.classList.contains('delete-patient-btn')) {
+            deleteUnassignedPatient(e.target.dataset.patientId, e.target.dataset.patientName);
+        }
+        // Edit Team from List in Modal
+        if (e.target.classList.contains('edit-team-from-list-btn')) {
+            const team = teams.find(t => t.id === e.target.dataset.teamId);
+            if (team) populateTeamForm(team);
+        }
+        // Delete Team from List in Modal
+        if (e.target.classList.contains('delete-team-from-list-btn')) {
+            deleteTeam(e.target.dataset.teamId, e.target.dataset.teamName);
+        }
+        // Edit Single Default Team
+        if(e.target.classList.contains('edit-single-default-btn')) {
+            const index = parseInt(e.target.dataset.index, 10);
+            const team = sessionDefaultTeams[index];
+            populateDefaultTeamForm(team, index);
+        }
+    });
+    
+    // Event listeners for static elements
+    addPatientBtn.addEventListener('click', addPatient);
+    assignPatientsBtn.addEventListener('click', runAssignmentProcess);
+    undoAssignmentBtn.addEventListener('click', handleUndoAssignment);
+    resetTeamsBtn.addEventListener('click', handleResetTeams);
+    deleteAllUnassignedBtn.addEventListener('click', deleteAllUnassignedPatients);
+
+    document.getElementById('edit-add-teams-btn').addEventListener('click', () => {
+        renderEditTeamsList();
+        clearTeamForm();
+        editTeamsModal.classList.add('visible');
+    });
+    document.getElementById('edit-teams-exit-btn').addEventListener('click', () => editTeamsModal.classList.remove('visible'));
+    teamFormSaveBtn.addEventListener('click', saveTeamFromModal);
+    teamFormClearBtn.addEventListener('click', clearTeamForm);
+    teamFormDeleteBtn.addEventListener('click', () => {
+        if (editingTeam && editingTeam.id) {
+            deleteTeam(editingTeam.id, editingTeam.teamName);
+        }
+    });
+
+    document.getElementById('fast-data-entry-btn').addEventListener('click', () => fastDataEntryModal.classList.add('visible'));
+    document.getElementById('fast-entry-cancel').addEventListener('click', () => fastDataEntryModal.classList.remove('visible'));
+    document.getElementById('fast-entry-submit').addEventListener('click', handleFastDataSubmit);
+
+    document.getElementById('load-defaults-btn').addEventListener('click', () => {
+        displayGeneralModal("Delete ALL current teams and load default set?", () => {
+            _loadDefaultTeamsData();
+            displayGeneralModal("Default teams loaded!");
+            clearTeamForm();
+            renderEditTeamsList();
+        });
+    });
+    
+    document.getElementById('edit-defaults-btn').addEventListener('click', () => {
+        renderEditDefaultTeamsList();
+        editDefaultFormContainer.classList.add('hidden');
+        editDefaultListContainer.classList.remove('hidden');
+        editDefaultTeamsModal.classList.add('visible');
+    });
+    document.getElementById('edit-defaults-exit-btn').addEventListener('click', () => editDefaultTeamsModal.classList.remove('visible'));
+    
+    // Listen for changes on dynamically created team card inputs
+    teamsContainer.addEventListener('change', (e) => {
+        const teamId = e.target.dataset.teamId;
+        const team = teams.find(t => t.id === teamId);
+        if (!team) return;
+
+        if (e.target.classList.contains('low-cap-checkbox')) {
+            team.lowCap = e.target.checked;
+        }
+    });
+
+    teamsContainer.addEventListener('blur', (e) => {
+        const teamId = e.target.dataset.teamId;
+        const team = teams.find(t => t.id === teamId);
+        if (!team) return;
+
+        if (e.target.classList.contains('starting-count-input')) {
+            const newCount = parseInt(e.target.value, 10);
+            if (!isNaN(newCount) && newCount >= 0) {
+                team.startingPatientCount = newCount;
+            } else {
+                e.target.value = team.startingPatientCount; // Revert on invalid input
+            }
+        }
+        if (e.target.classList.contains('other-locations-input')) {
+            team.otherLocations = e.target.value.split(',').map(loc => loc.trim()).filter(Boolean);
+        }
+    }, true); // Use capture phase to ensure blur event is caught
+
+    const renderAll = () => {
+        renderTeams();
+        renderUnassignedPatients();
+        renderReports();
+    };
+
+    // --- INITIALIZE APP ---
+    const init = () => {
+        _loadDefaultTeamsData(); // Load defaults on first run
+        renderAll();
+    };
+
+    init();
+});
+</script>
+</body>
+</html>
